@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Track ingredient stock, purchases, and recipe margins.",
     start_url: "/",
     display: "standalone",
-    background_color: "#fafafa",
-    theme_color: "#171717",
+    background_color: "#121212",
+    theme_color: "#121212",
     icons: [
       { src: "/icon", sizes: "64x64", type: "image/png" },
       { src: "/apple-icon", sizes: "180x180", type: "image/png" },

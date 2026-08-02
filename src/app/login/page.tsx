@@ -17,13 +17,13 @@ export default function LoginPage() {
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 px-6 text-center">
       <div>
         <h1 className="text-2xl font-semibold">Sauce Cost & Stock Tracker</h1>
-        <p className="mt-2 text-sm text-neutral-500">
+        <p className="mt-2 text-sm text-text-secondary">
           Track ingredient stock, purchases, and recipe margins.
         </p>
       </div>
       <button
         onClick={signInWithGoogle}
-        className="flex w-full max-w-xs items-center justify-center gap-3 rounded-xl border border-neutral-300 bg-white px-6 py-4 text-base font-medium text-neutral-800 shadow-sm active:bg-neutral-50"
+        className="flex w-full max-w-xs items-center justify-center gap-3 rounded-xl border border-border bg-white px-6 py-4 text-base font-medium text-[#3c4043] shadow-sm active:bg-neutral-100"
       >
         <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
           <path

@@ -2,9 +2,9 @@
 
 import { useRef, useState, useTransition } from "react";
 import { Modal } from "@/components/modal";
-import { addIngredient } from "./actions";
+import { createRecipe } from "./actions";
 
-export function AddIngredientButton() {
+export function NewRecipeButton() {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -16,11 +16,10 @@ export function AddIngredientButton() {
     setError(null);
     startTransition(async () => {
       try {
-        await addIngredient(formData);
-        formRef.current?.reset();
-        setOpen(false);
+        await createRecipe(formData);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to add ingredient");
+        // redirect() throws internally on success — only real errors land here
+        setError(err instanceof Error ? err.message : "Failed to create recipe");
       }
     });
   };
@@ -31,10 +30,10 @@ export function AddIngredientButton() {
         onClick={() => setOpen(true)}
         className="w-full rounded-xl border-2 border-dashed border-border py-3 text-sm font-medium text-text-secondary active:bg-surface-hover"
       >
-        + Add ingredient
+        + New recipe
       </button>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Add ingredient">
+      <Modal open={open} onClose={() => setOpen(false)} title="New recipe">
         <form ref={formRef} onSubmit={submit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-text-secondary">Name</label>
@@ -42,29 +41,31 @@ export function AddIngredientButton() {
               name="name"
               required
               autoFocus
-              placeholder="e.g. พริกแดง, Vinegar"
+              placeholder="e.g. สูตรเผ็ด"
               className="mt-1 w-full field-input"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-text-secondary">Unit</label>
+            <label className="block text-sm font-medium text-text-secondary">Batch volume (ml)</label>
             <input
-              name="unit"
-              required
-              placeholder="e.g. กรัม, มล., ชิ้น"
-              className="mt-1 w-full field-input"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary">
-              Low stock threshold (optional)
-            </label>
-            <input
-              name="low_stock_threshold"
+              name="batch_volume_ml"
               type="number"
               inputMode="decimal"
               step="any"
               min="0"
+              required
+              className="mt-1 w-full field-input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">Bottle size (ml)</label>
+            <input
+              name="bottle_size_ml"
+              type="number"
+              inputMode="decimal"
+              step="any"
+              min="0"
+              required
               className="mt-1 w-full field-input"
             />
           </div>
@@ -74,7 +75,7 @@ export function AddIngredientButton() {
             disabled={isPending}
             className="w-full btn-primary"
           >
-            {isPending ? "Adding…" : "Add ingredient"}
+            {isPending ? "Creating…" : "Create & edit recipe"}
           </button>
         </form>
       </Modal>

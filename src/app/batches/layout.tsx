@@ -1,6 +1,6 @@
 import { Nav } from "@/components/nav";
 
-export default function StockLayout({ children }: { children: React.ReactNode }) {
+export default function BatchesLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-bg">
       <Nav />

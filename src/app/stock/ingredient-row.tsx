@@ -55,22 +55,23 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
   };
 
   return (
-    <li className="flex items-center gap-3 border-b border-neutral-100 py-3 last:border-0">
+    <li className="flex items-center gap-3 border-b border-border py-3 last:border-0">
       <button
         onClick={() => setEditOpen(true)}
         className="min-w-0 flex-1 text-left"
       >
         <div className="flex items-center gap-2">
-          <span className="truncate font-medium text-neutral-900">{ingredient.name}</span>
+          <span className="truncate font-medium text-text">{ingredient.name}</span>
           {isLow && (
-            <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+            <span className="shrink-0 rounded-full bg-alert-bg px-2 py-0.5 text-[11px] font-medium text-alert">
               low
             </span>
           )}
         </div>
-        <p className="mt-0.5 text-xs text-neutral-500">
-          {ingredient.qty_on_hand} {ingredient.unit} on hand · avg ฿
-          {ingredient.avg_price_per_unit.toFixed(2)}/{ingredient.unit}
+        <p className="mt-0.5 text-xs text-text-secondary">
+          <span className="font-mono">{ingredient.qty_on_hand}</span> {ingredient.unit} on hand ·
+          avg <span className="font-mono">฿{ingredient.avg_price_per_unit.toFixed(2)}</span>/
+          {ingredient.unit}
           {ingredient.last_purchase_date && (
             <> · last bought {ingredient.last_purchase_date}</>
           )}
@@ -79,7 +80,7 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
 
       <button
         onClick={() => setPurchaseOpen(true)}
-        className="shrink-0 rounded-xl bg-neutral-900 px-4 py-3 text-sm font-medium text-white active:bg-neutral-700"
+        className="shrink-0 rounded-xl bg-accent px-4 py-3 text-sm font-medium text-[#121212] active:bg-accent/80"
       >
         + Purchase
       </button>
@@ -88,7 +89,7 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
         <form onSubmit={submitPurchase} className="space-y-4">
           <input type="hidden" name="ingredient_id" value={ingredient.id} />
           <div>
-            <label className="block text-sm font-medium text-neutral-700">
+            <label className="block text-sm font-medium text-text-secondary">
               Qty bought ({ingredient.unit})
             </label>
             <input
@@ -99,11 +100,11 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
               min="0"
               required
               autoFocus
-              className="mt-1 w-full rounded-lg border border-neutral-300 px-4 py-3 text-base"
+              className="mt-1 w-full field-input"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-neutral-700">Total price paid (฿)</label>
+            <label className="block text-sm font-medium text-text-secondary">Total price paid (฿)</label>
             <input
               name="price_paid_total"
               type="number"
@@ -111,23 +112,23 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
               step="any"
               min="0"
               required
-              className="mt-1 w-full rounded-lg border border-neutral-300 px-4 py-3 text-base"
+              className="mt-1 w-full field-input"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-neutral-700">Date</label>
+            <label className="block text-sm font-medium text-text-secondary">Date</label>
             <input
               name="purchase_date"
               type="date"
               defaultValue={todayISO()}
-              className="mt-1 w-full rounded-lg border border-neutral-300 px-4 py-3 text-base"
+              className="mt-1 w-full field-input"
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-alert">{error}</p>}
           <button
             type="submit"
             disabled={isPending}
-            className="w-full rounded-xl bg-neutral-900 py-3 text-base font-medium text-white disabled:opacity-50"
+            className="w-full btn-primary"
           >
             {isPending ? "Saving…" : "Save purchase"}
           </button>
@@ -138,25 +139,25 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
         <form onSubmit={submitEdit} className="space-y-4">
           <input type="hidden" name="id" value={ingredient.id} />
           <div>
-            <label className="block text-sm font-medium text-neutral-700">Name</label>
+            <label className="block text-sm font-medium text-text-secondary">Name</label>
             <input
               name="name"
               defaultValue={ingredient.name}
               required
-              className="mt-1 w-full rounded-lg border border-neutral-300 px-4 py-3 text-base"
+              className="mt-1 w-full field-input"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-neutral-700">Unit</label>
+            <label className="block text-sm font-medium text-text-secondary">Unit</label>
             <input
               name="unit"
               defaultValue={ingredient.unit}
               required
-              className="mt-1 w-full rounded-lg border border-neutral-300 px-4 py-3 text-base"
+              className="mt-1 w-full field-input"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-neutral-700">
+            <label className="block text-sm font-medium text-text-secondary">
               Low stock threshold (optional)
             </label>
             <input
@@ -166,15 +167,15 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
               step="any"
               min="0"
               defaultValue={ingredient.low_stock_threshold ?? ""}
-              className="mt-1 w-full rounded-lg border border-neutral-300 px-4 py-3 text-base"
+              className="mt-1 w-full field-input"
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-alert">{error}</p>}
           <div className="flex gap-2">
             <button
               type="submit"
               disabled={isPending}
-              className="flex-1 rounded-xl bg-neutral-900 py-3 text-base font-medium text-white disabled:opacity-50"
+              className="flex-1 btn-primary"
             >
               {isPending ? "Saving…" : "Save"}
             </button>
@@ -182,7 +183,7 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
               type="button"
               onClick={onDelete}
               disabled={isPending}
-              className="rounded-xl border border-red-200 px-4 py-3 text-base font-medium text-red-600"
+              className="rounded-xl border border-alert/40 px-4 py-3 text-base font-medium text-alert"
             >
               Delete
             </button>

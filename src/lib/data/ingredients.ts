@@ -37,3 +37,20 @@ export async function getIngredientsWithLastPurchase(): Promise<
     last_purchase_date: lastPurchaseByIngredient.get(i.id) ?? null,
   }));
 }
+
+export type IngredientOption = {
+  id: string;
+  name: string;
+  unit: string;
+  avg_price_per_unit: number;
+};
+
+export async function getIngredientOptions(): Promise<IngredientOption[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ingredients")
+    .select("id, name, unit, avg_price_per_unit")
+    .order("name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}

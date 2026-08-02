@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+type ActionResult = { error: string } | undefined;
+
 async function requireUser() {
   const supabase = await createClient();
   const {
@@ -13,7 +15,7 @@ async function requireUser() {
   return { supabase, user };
 }
 
-export async function createRecipe(formData: FormData) {
+export async function createRecipe(formData: FormData): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
 
   const name = String(formData.get("name") ?? "").trim();
@@ -21,7 +23,7 @@ export async function createRecipe(formData: FormData) {
   const batchVolumeMl = Number(formData.get("batch_volume_ml"));
 
   if (!name || !(bottleSizeMl > 0) || !(batchVolumeMl > 0)) {
-    throw new Error("Name, bottle size, and batch volume are required");
+    return { error: "Name, bottle size, and batch volume are required" };
   }
 
   const { data, error } = await supabase
@@ -34,18 +36,18 @@ export async function createRecipe(formData: FormData) {
     })
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath("/recipes");
   redirect(`/recipes/${data.id}`);
 }
 
-export async function updateRecipe(formData: FormData) {
+export async function updateRecipe(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
 
   const id = String(formData.get("id"));
   const name = String(formData.get("name") ?? "").trim();
-  if (!name) throw new Error("Name is required");
+  if (!name) return { error: "Name is required" };
 
   const { error } = await supabase
     .from("recipes")
@@ -64,23 +66,23 @@ export async function updateRecipe(formData: FormData) {
         : null,
     })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath(`/recipes/${id}`);
   revalidatePath("/recipes");
 }
 
-export async function deleteRecipe(formData: FormData) {
+export async function deleteRecipe(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
   const id = String(formData.get("id"));
   const { error } = await supabase.from("recipes").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath("/recipes");
   redirect("/recipes");
 }
 
-export async function addRecipeIngredient(formData: FormData) {
+export async function addRecipeIngredient(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
 
   const recipeId = String(formData.get("recipe_id"));
@@ -88,7 +90,7 @@ export async function addRecipeIngredient(formData: FormData) {
   const qtyUsed = Number(formData.get("qty_used"));
 
   if (!ingredientId || !(qtyUsed > 0)) {
-    throw new Error("Pick an ingredient and a quantity greater than 0");
+    return { error: "Pick an ingredient and a quantity greater than 0" };
   }
 
   const { error } = await supabase.from("recipe_ingredients").insert({
@@ -96,40 +98,40 @@ export async function addRecipeIngredient(formData: FormData) {
     ingredient_id: ingredientId,
     qty_used: qtyUsed,
   });
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath(`/recipes/${recipeId}`);
 }
 
-export async function updateRecipeIngredient(formData: FormData) {
+export async function updateRecipeIngredient(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
 
   const id = String(formData.get("id"));
   const recipeId = String(formData.get("recipe_id"));
   const qtyUsed = Number(formData.get("qty_used"));
-  if (!(qtyUsed > 0)) throw new Error("Quantity must be greater than 0");
+  if (!(qtyUsed > 0)) return { error: "Quantity must be greater than 0" };
 
   const { error } = await supabase
     .from("recipe_ingredients")
     .update({ qty_used: qtyUsed })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath(`/recipes/${recipeId}`);
 }
 
-export async function removeRecipeIngredient(formData: FormData) {
+export async function removeRecipeIngredient(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
   const id = String(formData.get("id"));
   const recipeId = String(formData.get("recipe_id"));
 
   const { error } = await supabase.from("recipe_ingredients").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath(`/recipes/${recipeId}`);
 }
 
-export async function addPackagingCost(formData: FormData) {
+export async function addPackagingCost(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
 
   const recipeId = String(formData.get("recipe_id"));
@@ -137,7 +139,7 @@ export async function addPackagingCost(formData: FormData) {
   const costPerUnit = Number(formData.get("cost_per_unit"));
 
   if (!itemName || !(costPerUnit >= 0)) {
-    throw new Error("Item name and a valid cost are required");
+    return { error: "Item name and a valid cost are required" };
   }
 
   const { error } = await supabase.from("packaging_costs").insert({
@@ -145,18 +147,18 @@ export async function addPackagingCost(formData: FormData) {
     item_name: itemName,
     cost_per_unit: costPerUnit,
   });
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath(`/recipes/${recipeId}`);
 }
 
-export async function removePackagingCost(formData: FormData) {
+export async function removePackagingCost(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
   const id = String(formData.get("id"));
   const recipeId = String(formData.get("recipe_id"));
 
   const { error } = await supabase.from("packaging_costs").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath(`/recipes/${recipeId}`);
 }

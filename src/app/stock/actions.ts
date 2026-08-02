@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+type ActionResult = { error: string } | undefined;
+
 async function requireUser() {
   const supabase = await createClient();
   const {
@@ -13,14 +15,14 @@ async function requireUser() {
   return { supabase, user };
 }
 
-export async function addIngredient(formData: FormData) {
+export async function addIngredient(formData: FormData): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
 
   const name = String(formData.get("name") ?? "").trim();
   const unit = String(formData.get("unit") ?? "").trim();
   const thresholdRaw = String(formData.get("low_stock_threshold") ?? "").trim();
 
-  if (!name || !unit) throw new Error("Name and unit are required");
+  if (!name || !unit) return { error: "Name and unit are required" };
 
   const { error } = await supabase.from("ingredients").insert({
     user_id: user.id,
@@ -28,13 +30,13 @@ export async function addIngredient(formData: FormData) {
     unit,
     low_stock_threshold: thresholdRaw ? Number(thresholdRaw) : null,
   });
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath("/stock");
   revalidatePath("/stock/low");
 }
 
-export async function updateIngredient(formData: FormData) {
+export async function updateIngredient(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
 
   const id = String(formData.get("id"));
@@ -42,7 +44,7 @@ export async function updateIngredient(formData: FormData) {
   const unit = String(formData.get("unit") ?? "").trim();
   const thresholdRaw = String(formData.get("low_stock_threshold") ?? "").trim();
 
-  if (!name || !unit) throw new Error("Name and unit are required");
+  if (!name || !unit) return { error: "Name and unit are required" };
 
   const { error } = await supabase
     .from("ingredients")
@@ -52,13 +54,13 @@ export async function updateIngredient(formData: FormData) {
       low_stock_threshold: thresholdRaw ? Number(thresholdRaw) : null,
     })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath("/stock");
   revalidatePath("/stock/low");
 }
 
-export async function updateLowStockThreshold(formData: FormData) {
+export async function updateLowStockThreshold(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
 
   const id = String(formData.get("id"));
@@ -68,24 +70,24 @@ export async function updateLowStockThreshold(formData: FormData) {
     .from("ingredients")
     .update({ low_stock_threshold: thresholdRaw ? Number(thresholdRaw) : null })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath("/stock");
   revalidatePath("/stock/low");
 }
 
-export async function deleteIngredient(formData: FormData) {
+export async function deleteIngredient(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
 
   const id = String(formData.get("id"));
   const { error } = await supabase.from("ingredients").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath("/stock");
   revalidatePath("/stock/low");
 }
 
-export async function logPurchase(formData: FormData) {
+export async function logPurchase(formData: FormData): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
 
   const ingredientId = String(formData.get("ingredient_id"));
@@ -94,7 +96,7 @@ export async function logPurchase(formData: FormData) {
   const purchaseDateRaw = String(formData.get("purchase_date") ?? "").trim();
 
   if (!ingredientId || !(qtyBought > 0) || !(pricePaidTotal >= 0)) {
-    throw new Error("Valid ingredient, quantity, and price are required");
+    return { error: "Valid ingredient, quantity, and price are required" };
   }
 
   const { error } = await supabase.from("purchases").insert({
@@ -104,7 +106,7 @@ export async function logPurchase(formData: FormData) {
     price_paid_total: pricePaidTotal,
     purchase_date: purchaseDateRaw || undefined,
   });
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath("/stock");
   revalidatePath("/stock/low");

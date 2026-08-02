@@ -67,11 +67,8 @@ export function RecipeEditor({
     }
     setSaveError(null);
     startTransition(async () => {
-      try {
-        await updateRecipe(formData);
-      } catch (err) {
-        setSaveError(err instanceof Error ? err.message : "Failed to save");
-      }
+      const result = await updateRecipe(formData);
+      if (result?.error) setSaveError(result.error);
     });
   };
 
@@ -340,12 +337,9 @@ function AddIngredientForm({
     const formData = new FormData(e.currentTarget);
     setError(null);
     startTransition(async () => {
-      try {
-        await addRecipeIngredient(formData);
-        (e.target as HTMLFormElement).reset();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to add");
-      }
+      const result = await addRecipeIngredient(formData);
+      if (result?.error) setError(result.error);
+      else (e.target as HTMLFormElement).reset();
     });
   };
 
@@ -433,12 +427,9 @@ function AddPackagingForm({ recipeId }: { recipeId: string }) {
     const formData = new FormData(e.currentTarget);
     setError(null);
     startTransition(async () => {
-      try {
-        await addPackagingCost(formData);
-        (e.target as HTMLFormElement).reset();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to add");
-      }
+      const result = await addPackagingCost(formData);
+      if (result?.error) setError(result.error);
+      else (e.target as HTMLFormElement).reset();
     });
   };
 

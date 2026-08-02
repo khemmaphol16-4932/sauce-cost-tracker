@@ -35,12 +35,12 @@ export function LogBatchForm({
     setError(null);
     setSuccess(false);
     startTransition(async () => {
-      try {
-        await logBatch(formData);
+      const result = await logBatch(formData);
+      if (result?.error) {
+        setError(result.error);
+      } else {
         setOverride("");
         setSuccess(true);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to log batch");
       }
     });
   };

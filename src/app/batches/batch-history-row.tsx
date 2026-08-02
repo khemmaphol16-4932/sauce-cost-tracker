@@ -15,12 +15,9 @@ export function BatchHistoryRow({ batch }: { batch: BatchHistoryRowType }) {
     const formData = new FormData(e.currentTarget);
     setError(null);
     startTransition(async () => {
-      try {
-        await updateBatch(formData);
-        setOpen(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save");
-      }
+      const result = await updateBatch(formData);
+      if (result?.error) setError(result.error);
+      else setOpen(false);
     });
   };
 

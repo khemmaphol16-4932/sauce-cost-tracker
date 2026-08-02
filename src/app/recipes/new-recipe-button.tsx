@@ -15,12 +15,10 @@ export function NewRecipeButton() {
     const formData = new FormData(e.currentTarget);
     setError(null);
     startTransition(async () => {
-      try {
-        await createRecipe(formData);
-      } catch (err) {
-        // redirect() throws internally on success — only real errors land here
-        setError(err instanceof Error ? err.message : "Failed to create recipe");
-      }
+      // On success createRecipe() calls redirect(), which throws internally and
+      // is handled by Next's client runtime — it never reaches this line.
+      const result = await createRecipe(formData);
+      if (result?.error) setError(result.error);
     });
   };
 

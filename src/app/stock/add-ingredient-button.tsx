@@ -15,12 +15,12 @@ export function AddIngredientButton() {
     const formData = new FormData(e.currentTarget);
     setError(null);
     startTransition(async () => {
-      try {
-        await addIngredient(formData);
+      const result = await addIngredient(formData);
+      if (result?.error) {
+        setError(result.error);
+      } else {
         formRef.current?.reset();
         setOpen(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to add ingredient");
       }
     });
   };

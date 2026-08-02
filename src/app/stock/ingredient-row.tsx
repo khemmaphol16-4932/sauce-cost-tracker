@@ -22,12 +22,9 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
     const formData = new FormData(e.currentTarget);
     setError(null);
     startTransition(async () => {
-      try {
-        await logPurchase(formData);
-        setPurchaseOpen(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to log purchase");
-      }
+      const result = await logPurchase(formData);
+      if (result?.error) setError(result.error);
+      else setPurchaseOpen(false);
     });
   };
 
@@ -36,12 +33,9 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
     const formData = new FormData(e.currentTarget);
     setError(null);
     startTransition(async () => {
-      try {
-        await updateIngredient(formData);
-        setEditOpen(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save");
-      }
+      const result = await updateIngredient(formData);
+      if (result?.error) setError(result.error);
+      else setEditOpen(false);
     });
   };
 

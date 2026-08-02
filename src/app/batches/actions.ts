@@ -5,7 +5,9 @@ import { getRecipeDetail } from "@/lib/data/recipes";
 import { calcRecipeCost } from "@/lib/costing";
 import { revalidatePath } from "next/cache";
 
-export async function logBatch(formData: FormData) {
+type ActionResult = { error: string } | undefined;
+
+export async function logBatch(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -13,10 +15,10 @@ export async function logBatch(formData: FormData) {
   if (!user) throw new Error("Not authenticated");
 
   const recipeId = String(formData.get("recipe_id"));
-  if (!recipeId) throw new Error("Pick a recipe");
+  if (!recipeId) return { error: "Pick a recipe" };
 
   const detail = await getRecipeDetail(recipeId);
-  if (!detail) throw new Error("Recipe not found");
+  if (!detail) return { error: "Recipe not found" };
 
   const cost = calcRecipeCost(
     detail.recipe,
@@ -38,14 +40,14 @@ export async function logBatch(formData: FormData) {
     notes: notes || null,
     cost_per_bottle_snapshot: cost.costPerBottle,
   });
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath("/batches");
   revalidatePath("/stock");
   revalidatePath("/stock/low");
 }
 
-export async function updateBatch(formData: FormData) {
+export async function updateBatch(formData: FormData): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -58,7 +60,7 @@ export async function updateBatch(formData: FormData) {
   const notes = String(formData.get("notes") ?? "").trim();
 
   if (!batchDateRaw || !(Number(yieldRaw) > 0)) {
-    throw new Error("Date and a bottle yield greater than 0 are required");
+    return { error: "Date and a bottle yield greater than 0 are required" };
   }
 
   const { error } = await supabase
@@ -69,7 +71,7 @@ export async function updateBatch(formData: FormData) {
       notes: notes || null,
     })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath("/batches");
 }

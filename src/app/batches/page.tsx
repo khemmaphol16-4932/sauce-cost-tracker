@@ -2,6 +2,7 @@ import { getRecipes, getRecipeDetail } from "@/lib/data/recipes";
 import { getBatchHistory } from "@/lib/data/batches";
 import { calcRecipeCost } from "@/lib/costing";
 import { LogBatchForm } from "./log-batch-form";
+import { BatchHistoryRow } from "./batch-history-row";
 
 export default async function BatchesPage() {
   const recipeSummaries = await getRecipes();
@@ -38,19 +39,7 @@ export default async function BatchesPage() {
         ) : (
           <ul className="rounded-2xl border border-border bg-surface px-4 shadow-sm">
             {history.map((b) => (
-              <li key={b.id} className="border-b border-border py-3 last:border-0">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-text">{b.recipe_name}</span>
-                  <span className="text-xs text-text-secondary">{b.batch_date}</span>
-                </div>
-                <p className="mt-0.5 text-xs text-text-secondary">
-                  {b.actual_yield_bottles ?? "?"} bottles
-                  {b.cost_per_bottle_snapshot != null && (
-                    <> · ฿{b.cost_per_bottle_snapshot.toFixed(2)}/bottle at the time</>
-                  )}
-                </p>
-                {b.notes && <p className="mt-1 text-sm text-text-secondary">{b.notes}</p>}
-              </li>
+              <BatchHistoryRow key={b.id} batch={b} />
             ))}
           </ul>
         )}

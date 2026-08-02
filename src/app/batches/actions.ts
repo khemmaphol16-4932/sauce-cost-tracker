@@ -44,3 +44,32 @@ export async function logBatch(formData: FormData) {
   revalidatePath("/stock");
   revalidatePath("/stock/low");
 }
+
+export async function updateBatch(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const id = String(formData.get("id"));
+  const batchDateRaw = String(formData.get("batch_date") ?? "").trim();
+  const yieldRaw = String(formData.get("actual_yield_bottles") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  if (!batchDateRaw || !(Number(yieldRaw) > 0)) {
+    throw new Error("Date and a bottle yield greater than 0 are required");
+  }
+
+  const { error } = await supabase
+    .from("batches")
+    .update({
+      batch_date: batchDateRaw,
+      actual_yield_bottles: Number(yieldRaw),
+      notes: notes || null,
+    })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/batches");
+}

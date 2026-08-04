@@ -7,6 +7,7 @@ export type RecipeCostInputs = {
   labor_rate_per_hour: number;
   overhead_per_batch: number;
   platform_fee_pct: number;
+  vat_pct: number;
   target_sell_price: number | null;
 };
 
@@ -50,7 +51,8 @@ export function calcRecipeCost(
 
   const sellPrice = recipe.target_sell_price ?? 0;
   const platformFeeAmount = sellPrice * (recipe.platform_fee_pct / 100);
-  const profitPerBottle = sellPrice - platformFeeAmount - costPerBottle;
+  const vatAmount = sellPrice * (recipe.vat_pct / 100);
+  const profitPerBottle = sellPrice - platformFeeAmount - vatAmount - costPerBottle;
   const marginPct = sellPrice > 0 ? (profitPerBottle / sellPrice) * 100 : 0;
 
   let indicator: "red" | "yellow" | "green" = "red";
@@ -69,6 +71,7 @@ export function calcRecipeCost(
     overheadCostPerBottle,
     costPerBottle,
     platformFeeAmount,
+    vatAmount,
     profitPerBottle,
     marginPct,
     indicator,

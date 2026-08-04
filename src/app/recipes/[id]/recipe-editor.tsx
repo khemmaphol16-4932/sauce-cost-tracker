@@ -4,14 +4,17 @@ import { useMemo, useState, useTransition } from "react";
 import {
   addPackagingCost,
   addRecipeIngredient,
+  addSopStep,
   deleteRecipe,
   removePackagingCost,
   removeRecipeIngredient,
+  removeSopStep,
   updateRecipe,
   updateRecipeIngredient,
+  updateSopStep,
 } from "../actions";
 import { calcRecipeCost, PLATFORM_FEE_PRESETS } from "@/lib/costing";
-import type { RecipeDetail, RecipeIngredientRow, PackagingCostRow } from "@/lib/data/recipes";
+import type { RecipeDetail, RecipeIngredientRow, PackagingCostRow, SopStepRow } from "@/lib/data/recipes";
 import type { IngredientOption } from "@/lib/data/ingredients";
 
 const INDICATOR_STYLES = {
@@ -24,11 +27,13 @@ export function RecipeEditor({
   recipe,
   ingredients,
   packaging,
+  sopSteps,
   ingredientOptions,
 }: {
   recipe: RecipeDetail;
   ingredients: RecipeIngredientRow[];
   packaging: PackagingCostRow[];
+  sopSteps: SopStepRow[];
   ingredientOptions: IngredientOption[];
 }) {
   const [draft, setDraft] = useState(recipe);
@@ -62,6 +67,7 @@ export function RecipeEditor({
     formData.set("labor_rate_per_hour", String(draft.labor_rate_per_hour));
     formData.set("overhead_per_batch", String(draft.overhead_per_batch));
     formData.set("platform_fee_pct", String(draft.platform_fee_pct));
+    formData.set("vat_pct", String(draft.vat_pct));
     if (draft.target_sell_price != null) {
       formData.set("target_sell_price", String(draft.target_sell_price));
     }
@@ -107,6 +113,7 @@ export function RecipeEditor({
           <Row label="Overhead / bottle" value={summary.overheadCostPerBottle} />
           <Row label="Cost / bottle" value={summary.costPerBottle} bold />
           <Row label="Platform fee / bottle" value={summary.platformFeeAmount} />
+          <Row label="VAT / bottle" value={summary.vatAmount} />
           <Row label="Profit / bottle" value={summary.profitPerBottle} bold />
         </dl>
         <p className="mt-3 text-[11px] leading-snug text-text-secondary">
@@ -190,6 +197,9 @@ export function RecipeEditor({
             </div>
           )}
         </Field>
+        <Field label="VAT %">
+          <NumberInput value={draft.vat_pct} onChange={(v) => set("vat_pct", v)} />
+        </Field>
 
         {saveError && <p className="text-sm text-alert">{saveError}</p>}
         <div className="flex gap-2">
@@ -236,6 +246,20 @@ export function RecipeEditor({
           )}
         </ul>
         <AddPackagingForm recipeId={recipe.id} />
+      </div>
+
+      {/* SOP */}
+      <div className="card">
+        <h2 className="mb-2 text-sm font-semibold text-text">Production SOP</h2>
+        <ol className="mb-3 divide-y divide-border">
+          {sopSteps.map((step, i) => (
+            <SopStepLine key={step.id} recipeId={recipe.id} step={step} index={i + 1} />
+          ))}
+          {sopSteps.length === 0 && (
+            <p className="py-2 text-sm text-text-secondary">No steps added yet.</p>
+          )}
+        </ol>
+        <AddSopStepForm recipeId={recipe.id} />
       </div>
     </div>
   );
@@ -451,6 +475,96 @@ function AddPackagingForm({ recipeId }: { recipeId: string }) {
         required
         placeholder="฿/bottle"
         className="w-24 rounded-lg border border-border bg-bg px-3 py-3 text-sm text-text"
+      />
+      <button
+        type="submit"
+        disabled={isPending}
+        className="shrink-0 rounded-lg bg-accent px-4 py-3 text-sm font-medium text-[#121212] disabled:opacity-50"
+      >
+        Add
+      </button>
+      {error && <p className="w-full text-sm text-alert">{error}</p>}
+    </form>
+  );
+}
+
+function SopStepLine({
+  recipeId,
+  step,
+  index,
+}: {
+  recipeId: string;
+  step: SopStepRow;
+  index: number;
+}) {
+  const [text, setText] = useState(step.instruction);
+  const [isPending, startTransition] = useTransition();
+
+  const saveText = () => {
+    if (text.trim() === step.instruction) return;
+    const formData = new FormData();
+    formData.set("id", step.id);
+    formData.set("recipe_id", recipeId);
+    formData.set("instruction", text);
+    startTransition(async () => {
+      await updateSopStep(formData);
+    });
+  };
+
+  const onRemove = () => {
+    const formData = new FormData();
+    formData.set("id", step.id);
+    formData.set("recipe_id", recipeId);
+    startTransition(async () => {
+      await removeSopStep(formData);
+    });
+  };
+
+  return (
+    <li className="flex items-center gap-2 py-2">
+      <span className="w-5 shrink-0 text-right text-xs text-text-secondary">{index}.</span>
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={saveText}
+        disabled={isPending}
+        className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-2 py-2 text-sm text-text"
+      />
+      <button
+        onClick={onRemove}
+        disabled={isPending}
+        className="shrink-0 px-2 text-xs text-alert"
+        aria-label="Remove"
+      >
+        ✕
+      </button>
+    </li>
+  );
+}
+
+function AddSopStepForm({ recipeId }: { recipeId: string }) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    setError(null);
+    startTransition(async () => {
+      const result = await addSopStep(formData);
+      if (result?.error) setError(result.error);
+      else (e.target as HTMLFormElement).reset();
+    });
+  };
+
+  return (
+    <form onSubmit={submit} className="flex items-end gap-2">
+      <input type="hidden" name="recipe_id" value={recipeId} />
+      <input
+        name="instruction"
+        required
+        placeholder="e.g. Sanitize bottles before filling"
+        className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 py-3 text-sm text-text"
       />
       <button
         type="submit"

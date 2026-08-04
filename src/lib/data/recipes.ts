@@ -23,6 +23,7 @@ export type RecipeDetail = {
   bottle_size_ml: number;
   target_sell_price: number | null;
   platform_fee_pct: number;
+  vat_pct: number;
   labor_hours_per_batch: number;
   labor_rate_per_hour: number;
   overhead_per_batch: number;
@@ -46,26 +47,43 @@ export type PackagingCostRow = {
   cost_per_unit: number;
 };
 
+export type SopStepRow = {
+  id: string;
+  step_order: number;
+  instruction: string;
+};
+
 export async function getRecipeDetail(id: string): Promise<{
   recipe: RecipeDetail;
   ingredients: RecipeIngredientRow[];
   packaging: PackagingCostRow[];
+  sopSteps: SopStepRow[];
 } | null> {
   const supabase = await createClient();
 
-  const [{ data: recipe, error: recipeError }, { data: recipeIngredients, error: riError }, { data: packaging, error: pkgError }] =
-    await Promise.all([
-      supabase.from("recipes").select("*").eq("id", id).maybeSingle(),
-      supabase
-        .from("recipe_ingredients")
-        .select("id, ingredient_id, qty_used, ingredients(name, unit, avg_price_per_unit)")
-        .eq("recipe_id", id),
-      supabase.from("packaging_costs").select("*").eq("recipe_id", id),
-    ]);
+  const [
+    { data: recipe, error: recipeError },
+    { data: recipeIngredients, error: riError },
+    { data: packaging, error: pkgError },
+    { data: sopSteps, error: sopError },
+  ] = await Promise.all([
+    supabase.from("recipes").select("*").eq("id", id).maybeSingle(),
+    supabase
+      .from("recipe_ingredients")
+      .select("id, ingredient_id, qty_used, ingredients(name, unit, avg_price_per_unit)")
+      .eq("recipe_id", id),
+    supabase.from("packaging_costs").select("*").eq("recipe_id", id),
+    supabase
+      .from("sop_steps")
+      .select("id, step_order, instruction")
+      .eq("recipe_id", id)
+      .order("step_order", { ascending: true }),
+  ]);
 
   if (recipeError) throw new Error(recipeError.message);
   if (riError) throw new Error(riError.message);
   if (pkgError) throw new Error(pkgError.message);
+  if (sopError) throw new Error(sopError.message);
   if (!recipe) return null;
 
   type RawRecipeIngredient = {
@@ -86,5 +104,5 @@ export async function getRecipeDetail(id: string): Promise<{
     })
   );
 
-  return { recipe, ingredients, packaging: packaging ?? [] };
+  return { recipe, ingredients, packaging: packaging ?? [], sopSteps: sopSteps ?? [] };
 }

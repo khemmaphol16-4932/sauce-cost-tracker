@@ -22,19 +22,20 @@ export function ExportButtons() {
 
   const exportAll = () => {
     startTransition(async () => {
-      const { ingredientsCsv, purchasesCsv, recipesCsv } = await getExportCsvs();
+      const { ingredientsCsv, purchasesCsv, recipesCsv, sopStepsCsv } = await getExportCsvs();
       const date = new Date().toISOString().slice(0, 10);
       if (ingredientsCsv) download(`ingredients-${date}.csv`, ingredientsCsv);
       if (purchasesCsv) download(`purchases-${date}.csv`, purchasesCsv);
       if (recipesCsv) download(`recipes-${date}.csv`, recipesCsv);
+      if (sopStepsCsv) download(`sop-steps-${date}.csv`, sopStepsCsv);
     });
   };
 
   return (
     <div className="space-y-3 card">
       <p className="text-sm text-text-secondary">
-        Download your ingredients, purchases, and recipes as CSV files — a manual backup of your
-        own data.
+        Download your ingredients, purchases, recipes, and SOP steps as CSV files — a manual
+        backup of your own data.
       </p>
       <button
         onClick={exportAll}

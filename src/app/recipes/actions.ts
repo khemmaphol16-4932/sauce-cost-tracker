@@ -61,6 +61,7 @@ export async function updateRecipe(formData: FormData): Promise<ActionResult> {
       labor_rate_per_hour: Number(formData.get("labor_rate_per_hour") || 0),
       overhead_per_batch: Number(formData.get("overhead_per_batch") || 0),
       platform_fee_pct: Number(formData.get("platform_fee_pct") || 0),
+      vat_pct: Number(formData.get("vat_pct") || 0),
       target_sell_price: formData.get("target_sell_price")
         ? Number(formData.get("target_sell_price"))
         : null,
@@ -158,6 +159,59 @@ export async function removePackagingCost(formData: FormData): Promise<ActionRes
   const recipeId = String(formData.get("recipe_id"));
 
   const { error } = await supabase.from("packaging_costs").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/recipes/${recipeId}`);
+}
+
+export async function addSopStep(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await requireUser();
+
+  const recipeId = String(formData.get("recipe_id"));
+  const instruction = String(formData.get("instruction") ?? "").trim();
+  if (!instruction) return { error: "Step instructions can't be empty" };
+
+  const { data: last, error: lastError } = await supabase
+    .from("sop_steps")
+    .select("step_order")
+    .eq("recipe_id", recipeId)
+    .order("step_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (lastError) return { error: lastError.message };
+
+  const nextOrder = (last?.step_order ?? 0) + 1;
+
+  const { error } = await supabase.from("sop_steps").insert({
+    recipe_id: recipeId,
+    step_order: nextOrder,
+    instruction,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/recipes/${recipeId}`);
+}
+
+export async function updateSopStep(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await requireUser();
+
+  const id = String(formData.get("id"));
+  const recipeId = String(formData.get("recipe_id"));
+  const instruction = String(formData.get("instruction") ?? "").trim();
+  if (!instruction) return { error: "Step instructions can't be empty" };
+
+  const { error } = await supabase.from("sop_steps").update({ instruction }).eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/recipes/${recipeId}`);
+}
+
+export async function removeSopStep(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id"));
+  const recipeId = String(formData.get("recipe_id"));
+
+  const { error } = await supabase.from("sop_steps").delete().eq("id", id);
   if (error) return { error: error.message };
 
   revalidatePath(`/recipes/${recipeId}`);

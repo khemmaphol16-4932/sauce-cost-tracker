@@ -21,6 +21,7 @@ export default async function RecipeDetailPage({
       recipe={detail.recipe}
       ingredients={detail.ingredients}
       packaging={detail.packaging}
+      sopSteps={detail.sopSteps}
       ingredientOptions={ingredientOptions}
     />
   );

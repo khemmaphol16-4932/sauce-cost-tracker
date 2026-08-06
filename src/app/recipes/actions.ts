@@ -6,6 +6,11 @@ import { redirect } from "next/navigation";
 
 type ActionResult = { error: string } | undefined;
 
+function clampPct(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
+}
+
 async function requireUser() {
   const supabase = await createClient();
   const {
@@ -13,6 +18,21 @@ async function requireUser() {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
   return { supabase, user };
+}
+
+async function nextSopStepOrder(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  recipeId: string
+): Promise<{ order?: number; error?: string }> {
+  const { data: last, error } = await supabase
+    .from("sop_steps")
+    .select("step_order")
+    .eq("recipe_id", recipeId)
+    .order("step_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return { error: error.message };
+  return { order: (last?.step_order ?? 0) + 1 };
 }
 
 export async function createRecipe(formData: FormData): Promise<ActionResult> {
@@ -55,13 +75,13 @@ export async function updateRecipe(formData: FormData): Promise<ActionResult> {
       name,
       bottle_size_ml: Number(formData.get("bottle_size_ml")),
       batch_volume_ml: Number(formData.get("batch_volume_ml")),
-      evaporation_loss_pct: Number(formData.get("evaporation_loss_pct") || 0),
-      waste_pct: Number(formData.get("waste_pct") || 0),
+      evaporation_loss_pct: clampPct(Number(formData.get("evaporation_loss_pct") || 0)),
+      waste_pct: clampPct(Number(formData.get("waste_pct") || 0)),
       labor_hours_per_batch: Number(formData.get("labor_hours_per_batch") || 0),
       labor_rate_per_hour: Number(formData.get("labor_rate_per_hour") || 0),
       overhead_per_batch: Number(formData.get("overhead_per_batch") || 0),
-      platform_fee_pct: Number(formData.get("platform_fee_pct") || 0),
-      vat_pct: Number(formData.get("vat_pct") || 0),
+      platform_fee_pct: clampPct(Number(formData.get("platform_fee_pct") || 0)),
+      vat_pct: clampPct(Number(formData.get("vat_pct") || 0)),
       target_sell_price: formData.get("target_sell_price")
         ? Number(formData.get("target_sell_price"))
         : null,
@@ -171,20 +191,12 @@ export async function addSopStep(formData: FormData): Promise<ActionResult> {
   const instruction = String(formData.get("instruction") ?? "").trim();
   if (!instruction) return { error: "Step instructions can't be empty" };
 
-  const { data: last, error: lastError } = await supabase
-    .from("sop_steps")
-    .select("step_order")
-    .eq("recipe_id", recipeId)
-    .order("step_order", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (lastError) return { error: lastError.message };
-
-  const nextOrder = (last?.step_order ?? 0) + 1;
+  const { order, error: orderError } = await nextSopStepOrder(supabase, recipeId);
+  if (orderError) return { error: orderError };
 
   const { error } = await supabase.from("sop_steps").insert({
     recipe_id: recipeId,
-    step_order: nextOrder,
+    step_order: order,
     instruction,
   });
   if (error) return { error: error.message };
@@ -212,6 +224,98 @@ export async function removeSopStep(formData: FormData): Promise<ActionResult> {
   const recipeId = String(formData.get("recipe_id"));
 
   const { error } = await supabase.from("sop_steps").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/recipes/${recipeId}`);
+}
+
+export async function moveSopStep(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await requireUser();
+
+  const id = String(formData.get("id"));
+  const recipeId = String(formData.get("recipe_id"));
+  const direction = String(formData.get("direction"));
+
+  const { data: steps, error: stepsError } = await supabase
+    .from("sop_steps")
+    .select("id, step_order")
+    .eq("recipe_id", recipeId)
+    .order("step_order", { ascending: true });
+  if (stepsError) return { error: stepsError.message };
+
+  const ordered = steps ?? [];
+  const idx = ordered.findIndex((s) => s.id === id);
+  if (idx === -1) return { error: "Step not found" };
+
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= ordered.length) return;
+
+  const current = ordered[idx];
+  const neighbor = ordered[swapIdx];
+
+  const { error: e1 } = await supabase
+    .from("sop_steps")
+    .update({ step_order: neighbor.step_order })
+    .eq("id", current.id);
+  if (e1) return { error: e1.message };
+
+  const { error: e2 } = await supabase
+    .from("sop_steps")
+    .update({ step_order: current.step_order })
+    .eq("id", neighbor.id);
+  if (e2) return { error: e2.message };
+
+  revalidatePath(`/recipes/${recipeId}`);
+}
+
+export async function addSopTemplate(formData: FormData): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+
+  const instruction = String(formData.get("instruction") ?? "").trim();
+  const recipeId = String(formData.get("recipe_id") ?? "");
+  if (!instruction) return { error: "Template text can't be empty" };
+
+  const { error } = await supabase
+    .from("sop_step_templates")
+    .insert({ user_id: user.id, instruction });
+  if (error) return { error: error.message };
+
+  if (recipeId) revalidatePath(`/recipes/${recipeId}`);
+}
+
+export async function removeSopTemplate(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id"));
+  const recipeId = String(formData.get("recipe_id") ?? "");
+
+  const { error } = await supabase.from("sop_step_templates").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  if (recipeId) revalidatePath(`/recipes/${recipeId}`);
+}
+
+export async function addSopStepFromTemplate(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await requireUser();
+
+  const recipeId = String(formData.get("recipe_id"));
+  const templateId = String(formData.get("template_id"));
+
+  const { data: template, error: templateError } = await supabase
+    .from("sop_step_templates")
+    .select("instruction")
+    .eq("id", templateId)
+    .maybeSingle();
+  if (templateError) return { error: templateError.message };
+  if (!template) return { error: "Template not found" };
+
+  const { order, error: orderError } = await nextSopStepOrder(supabase, recipeId);
+  if (orderError) return { error: orderError };
+
+  const { error } = await supabase.from("sop_steps").insert({
+    recipe_id: recipeId,
+    step_order: order,
+    instruction: template.instruction,
+  });
   if (error) return { error: error.message };
 
   revalidatePath(`/recipes/${recipeId}`);

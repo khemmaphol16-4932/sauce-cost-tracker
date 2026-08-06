@@ -5,10 +5,14 @@ import {
   addPackagingCost,
   addRecipeIngredient,
   addSopStep,
+  addSopStepFromTemplate,
+  addSopTemplate,
   deleteRecipe,
+  moveSopStep,
   removePackagingCost,
   removeRecipeIngredient,
   removeSopStep,
+  removeSopTemplate,
   updateRecipe,
   updateRecipeIngredient,
   updateSopStep,
@@ -16,6 +20,7 @@ import {
 import { calcRecipeCost, PLATFORM_FEE_PRESETS } from "@/lib/costing";
 import type { RecipeDetail, RecipeIngredientRow, PackagingCostRow, SopStepRow } from "@/lib/data/recipes";
 import type { IngredientOption } from "@/lib/data/ingredients";
+import type { SopTemplateRow } from "@/lib/data/sop-templates";
 
 const INDICATOR_STYLES = {
   red: "bg-alert-bg text-alert",
@@ -28,12 +33,14 @@ export function RecipeEditor({
   ingredients,
   packaging,
   sopSteps,
+  sopTemplates,
   ingredientOptions,
 }: {
   recipe: RecipeDetail;
   ingredients: RecipeIngredientRow[];
   packaging: PackagingCostRow[];
   sopSteps: SopStepRow[];
+  sopTemplates: SopTemplateRow[];
   ingredientOptions: IngredientOption[];
 }) {
   const [draft, setDraft] = useState(recipe);
@@ -143,10 +150,17 @@ export function RecipeEditor({
             <NumberInput
               value={draft.evaporation_loss_pct}
               onChange={(v) => set("evaporation_loss_pct", v)}
+              min={0}
+              max={100}
             />
           </Field>
           <Field label="Waste %">
-            <NumberInput value={draft.waste_pct} onChange={(v) => set("waste_pct", v)} />
+            <NumberInput
+              value={draft.waste_pct}
+              onChange={(v) => set("waste_pct", v)}
+              min={0}
+              max={100}
+            />
           </Field>
           <Field label="Labor hours/batch">
             <NumberInput
@@ -193,12 +207,19 @@ export function RecipeEditor({
               <NumberInput
                 value={draft.platform_fee_pct}
                 onChange={(v) => set("platform_fee_pct", v)}
+                min={0}
+                max={100}
               />
             </div>
           )}
         </Field>
         <Field label="VAT %">
-          <NumberInput value={draft.vat_pct} onChange={(v) => set("vat_pct", v)} />
+          <NumberInput
+            value={draft.vat_pct}
+            onChange={(v) => set("vat_pct", v)}
+            min={0}
+            max={100}
+          />
         </Field>
 
         {saveError && <p className="text-sm text-alert">{saveError}</p>}
@@ -253,13 +274,40 @@ export function RecipeEditor({
         <h2 className="mb-2 text-sm font-semibold text-text">Production SOP</h2>
         <ol className="mb-3 divide-y divide-border">
           {sopSteps.map((step, i) => (
-            <SopStepLine key={step.id} recipeId={recipe.id} step={step} index={i + 1} />
+            <SopStepLine
+              key={step.id}
+              recipeId={recipe.id}
+              step={step}
+              index={i + 1}
+              isFirst={i === 0}
+              isLast={i === sopSteps.length - 1}
+            />
           ))}
           {sopSteps.length === 0 && (
             <p className="py-2 text-sm text-text-secondary">No steps added yet.</p>
           )}
         </ol>
+        {sopTemplates.length > 0 && (
+          <InsertTemplateForm recipeId={recipe.id} templates={sopTemplates} />
+        )}
         <AddSopStepForm recipeId={recipe.id} />
+      </div>
+
+      {/* SOP step templates */}
+      <div className="card">
+        <h2 className="mb-1 text-sm font-semibold text-text">SOP step templates</h2>
+        <p className="mb-2 text-xs text-text-secondary">
+          Save common steps once, insert them into any recipe above.
+        </p>
+        <ul className="mb-3 divide-y divide-border">
+          {sopTemplates.map((t) => (
+            <SopTemplateLine key={t.id} recipeId={recipe.id} template={t} />
+          ))}
+          {sopTemplates.length === 0 && (
+            <p className="py-2 text-sm text-text-secondary">No templates saved yet.</p>
+          )}
+        </ul>
+        <AddSopTemplateForm recipeId={recipe.id} />
       </div>
     </div>
   );
@@ -283,14 +331,33 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function NumberInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function NumberInput({
+  value,
+  onChange,
+  min,
+  max,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+}) {
+  const clamp = (v: number) => {
+    let n = v;
+    if (min != null) n = Math.max(min, n);
+    if (max != null) n = Math.min(max, n);
+    return n;
+  };
+
   return (
     <input
       type="number"
       inputMode="decimal"
       step="any"
+      min={min}
+      max={max}
       value={Number.isFinite(value) ? value : 0}
-      onChange={(e) => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+      onChange={(e) => onChange(e.target.value === "" ? 0 : clamp(Number(e.target.value)))}
       className="w-full field-input"
     />
   );
@@ -492,10 +559,14 @@ function SopStepLine({
   recipeId,
   step,
   index,
+  isFirst,
+  isLast,
 }: {
   recipeId: string;
   step: SopStepRow;
   index: number;
+  isFirst: boolean;
+  isLast: boolean;
 }) {
   const [text, setText] = useState(step.instruction);
   const [isPending, startTransition] = useTransition();
@@ -520,6 +591,16 @@ function SopStepLine({
     });
   };
 
+  const onMove = (direction: "up" | "down") => {
+    const formData = new FormData();
+    formData.set("id", step.id);
+    formData.set("recipe_id", recipeId);
+    formData.set("direction", direction);
+    startTransition(async () => {
+      await moveSopStep(formData);
+    });
+  };
+
   return (
     <li className="flex items-center gap-2 py-2">
       <span className="w-5 shrink-0 text-right text-xs text-text-secondary">{index}.</span>
@@ -530,6 +611,24 @@ function SopStepLine({
         disabled={isPending}
         className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-2 py-2 text-sm text-text"
       />
+      <div className="flex shrink-0 flex-col">
+        <button
+          onClick={() => onMove("up")}
+          disabled={isPending || isFirst}
+          className="px-1 text-xs text-text-secondary disabled:opacity-30"
+          aria-label="Move up"
+        >
+          ▲
+        </button>
+        <button
+          onClick={() => onMove("down")}
+          disabled={isPending || isLast}
+          className="px-1 text-xs text-text-secondary disabled:opacity-30"
+          aria-label="Move down"
+        >
+          ▼
+        </button>
+      </div>
       <button
         onClick={onRemove}
         disabled={isPending}
@@ -572,6 +671,125 @@ function AddSopStepForm({ recipeId }: { recipeId: string }) {
         className="shrink-0 rounded-lg bg-accent px-4 py-3 text-sm font-medium text-[#121212] disabled:opacity-50"
       >
         Add
+      </button>
+      {error && <p className="w-full text-sm text-alert">{error}</p>}
+    </form>
+  );
+}
+
+function InsertTemplateForm({
+  recipeId,
+  templates,
+}: {
+  recipeId: string;
+  templates: SopTemplateRow[];
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    setError(null);
+    startTransition(async () => {
+      const result = await addSopStepFromTemplate(formData);
+      if (result?.error) setError(result.error);
+      else (e.target as HTMLFormElement).reset();
+    });
+  };
+
+  return (
+    <form onSubmit={submit} className="mb-2 flex items-end gap-2">
+      <input type="hidden" name="recipe_id" value={recipeId} />
+      <div className="flex-1">
+        <select
+          name="template_id"
+          required
+          className="w-full rounded-lg border border-border bg-bg px-3 py-3 text-sm text-text"
+        >
+          <option value="">Insert from template…</option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.instruction}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button
+        type="submit"
+        disabled={isPending}
+        className="shrink-0 rounded-lg bg-accent px-4 py-3 text-sm font-medium text-[#121212] disabled:opacity-50"
+      >
+        Insert
+      </button>
+      {error && <p className="w-full text-sm text-alert">{error}</p>}
+    </form>
+  );
+}
+
+function SopTemplateLine({
+  recipeId,
+  template,
+}: {
+  recipeId: string;
+  template: SopTemplateRow;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  const onRemove = () => {
+    const formData = new FormData();
+    formData.set("id", template.id);
+    formData.set("recipe_id", recipeId);
+    startTransition(async () => {
+      await removeSopTemplate(formData);
+    });
+  };
+
+  return (
+    <li className="flex items-center gap-2 py-2">
+      <span className="min-w-0 flex-1 truncate text-sm text-text">{template.instruction}</span>
+      <button
+        onClick={onRemove}
+        disabled={isPending}
+        className="shrink-0 px-2 text-xs text-alert"
+        aria-label="Remove"
+      >
+        ✕
+      </button>
+    </li>
+  );
+}
+
+function AddSopTemplateForm({ recipeId }: { recipeId: string }) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    setError(null);
+    startTransition(async () => {
+      const result = await addSopTemplate(formData);
+      if (result?.error) setError(result.error);
+      else (e.target as HTMLFormElement).reset();
+    });
+  };
+
+  return (
+    <form onSubmit={submit} className="flex items-end gap-2">
+      <input type="hidden" name="recipe_id" value={recipeId} />
+      <input
+        name="instruction"
+        required
+        placeholder="e.g. Sanitize bottles before filling"
+        className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 py-3 text-sm text-text"
+      />
+      <button
+        type="submit"
+        disabled={isPending}
+        className="shrink-0 rounded-lg bg-accent px-4 py-3 text-sm font-medium text-[#121212] disabled:opacity-50"
+      >
+        Save
       </button>
       {error && <p className="w-full text-sm text-alert">{error}</p>}
     </form>

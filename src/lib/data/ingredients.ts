@@ -8,7 +8,10 @@ export type IngredientWithLastPurchase = {
   avg_price_per_unit: number;
   low_stock_threshold: number | null;
   last_purchase_date: string | null;
+  price_jump_pct: number | null;
 };
+
+const PRICE_JUMP_ALERT_PCT = 15;
 
 export async function getIngredientsWithLastPurchase(): Promise<
   IngredientWithLastPurchase[]
@@ -18,24 +21,51 @@ export async function getIngredientsWithLastPurchase(): Promise<
   const [{ data: ingredients, error: ingredientsError }, { data: purchases, error: purchasesError }] =
     await Promise.all([
       supabase.from("ingredients").select("*").order("name", { ascending: true }),
-      supabase.from("purchases").select("ingredient_id, purchase_date"),
+      supabase
+        .from("purchases")
+        .select("ingredient_id, purchase_date, qty_bought, price_paid_total, created_at")
+        .order("purchase_date", { ascending: true })
+        .order("created_at", { ascending: true }),
     ]);
 
   if (ingredientsError) throw new Error(ingredientsError.message);
   if (purchasesError) throw new Error(purchasesError.message);
 
   const lastPurchaseByIngredient = new Map<string, string>();
+  const purchasesByIngredient = new Map<
+    string,
+    { qty_bought: number; price_paid_total: number }[]
+  >();
   for (const p of purchases ?? []) {
     const current = lastPurchaseByIngredient.get(p.ingredient_id);
     if (!current || p.purchase_date > current) {
       lastPurchaseByIngredient.set(p.ingredient_id, p.purchase_date);
     }
+    const list = purchasesByIngredient.get(p.ingredient_id) ?? [];
+    list.push({ qty_bought: p.qty_bought, price_paid_total: p.price_paid_total });
+    purchasesByIngredient.set(p.ingredient_id, list);
   }
 
-  return (ingredients ?? []).map((i) => ({
-    ...i,
-    last_purchase_date: lastPurchaseByIngredient.get(i.id) ?? null,
-  }));
+  return (ingredients ?? []).map((i) => {
+    const history = purchasesByIngredient.get(i.id) ?? [];
+    let price_jump_pct: number | null = null;
+    if (history.length >= 2) {
+      const latest = history[history.length - 1];
+      const previous = history[history.length - 2];
+      const latestUnitPrice = latest.qty_bought > 0 ? latest.price_paid_total / latest.qty_bought : 0;
+      const previousUnitPrice =
+        previous.qty_bought > 0 ? previous.price_paid_total / previous.qty_bought : 0;
+      if (previousUnitPrice > 0) {
+        const jump = ((latestUnitPrice - previousUnitPrice) / previousUnitPrice) * 100;
+        if (jump >= PRICE_JUMP_ALERT_PCT) price_jump_pct = jump;
+      }
+    }
+    return {
+      ...i,
+      last_purchase_date: lastPurchaseByIngredient.get(i.id) ?? null,
+      price_jump_pct,
+    };
+  });
 }
 
 export type IngredientOption = {

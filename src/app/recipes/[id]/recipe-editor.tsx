@@ -16,6 +16,7 @@ import {
   updateRecipe,
   updateRecipeIngredient,
   updateSopStep,
+  updateSopTemplate,
 } from "../actions";
 import { calcRecipeCost, PLATFORM_FEE_PRESETS } from "@/lib/costing";
 import type { RecipeDetail, RecipeIngredientRow, PackagingCostRow, SopStepRow } from "@/lib/data/recipes";
@@ -734,7 +735,19 @@ function SopTemplateLine({
   recipeId: string;
   template: SopTemplateRow;
 }) {
+  const [text, setText] = useState(template.instruction);
   const [isPending, startTransition] = useTransition();
+
+  const saveText = () => {
+    if (text.trim() === template.instruction) return;
+    const formData = new FormData();
+    formData.set("id", template.id);
+    formData.set("recipe_id", recipeId);
+    formData.set("instruction", text);
+    startTransition(async () => {
+      await updateSopTemplate(formData);
+    });
+  };
 
   const onRemove = () => {
     const formData = new FormData();
@@ -747,7 +760,13 @@ function SopTemplateLine({
 
   return (
     <li className="flex items-center gap-2 py-2">
-      <span className="min-w-0 flex-1 truncate text-sm text-text">{template.instruction}</span>
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={saveText}
+        disabled={isPending}
+        className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-2 py-2 text-sm text-text"
+      />
       <button
         onClick={onRemove}
         disabled={isPending}

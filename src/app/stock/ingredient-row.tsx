@@ -61,6 +61,11 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
               low
             </span>
           )}
+          {ingredient.price_jump_pct != null && (
+            <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-amber-400">
+              price +{ingredient.price_jump_pct.toFixed(0)}%
+            </span>
+          )}
         </div>
         <p className="mt-0.5 text-xs text-text-secondary">
           <span className="font-mono">{ingredient.qty_on_hand}</span> {ingredient.unit} on hand ·

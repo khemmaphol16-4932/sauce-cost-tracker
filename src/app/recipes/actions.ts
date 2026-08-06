@@ -283,6 +283,19 @@ export async function addSopTemplate(formData: FormData): Promise<ActionResult> 
   if (recipeId) revalidatePath(`/recipes/${recipeId}`);
 }
 
+export async function updateSopTemplate(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id"));
+  const recipeId = String(formData.get("recipe_id") ?? "");
+  const instruction = String(formData.get("instruction") ?? "").trim();
+  if (!instruction) return { error: "Template text can't be empty" };
+
+  const { error } = await supabase.from("sop_step_templates").update({ instruction }).eq("id", id);
+  if (error) return { error: error.message };
+
+  if (recipeId) revalidatePath(`/recipes/${recipeId}`);
+}
+
 export async function removeSopTemplate(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
   const id = String(formData.get("id"));

@@ -159,15 +159,21 @@ export async function getDashboardData(): Promise<DashboardData> {
     cost_per_bottle_snapshot: b.cost_per_bottle_snapshot,
   }));
 
-  const { count: batchCount } = await supabase
-    .from("batches")
-    .select("id, recipes!inner(business_id)", { count: "exact", head: true })
-    .eq("recipes.business_id", businessId);
+  const recipeIds = recipeSummaries.map((r) => r.id);
+  let batchCount = 0;
+  if (recipeIds.length > 0) {
+    const { count, error: batchCountError } = await supabase
+      .from("batches")
+      .select("id", { count: "exact", head: true })
+      .in("recipe_id", recipeIds);
+    if (batchCountError) throw new Error(batchCountError.message);
+    batchCount = count ?? 0;
+  }
 
   return {
     ingredientCount: ingredients?.length ?? 0,
     recipeCount: recipeSummaries.length,
-    batchCount: batchCount ?? 0,
+    batchCount,
     totalStockValue,
     lowStockCount,
     priceJumpCount,

@@ -38,9 +38,9 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && request.nextUrl.pathname === "/login") {
-    const stockUrl = request.nextUrl.clone();
-    stockUrl.pathname = "/stock";
-    return NextResponse.redirect(stockUrl);
+    const dashboardUrl = request.nextUrl.clone();
+    dashboardUrl.pathname = "/dashboard";
+    return NextResponse.redirect(dashboardUrl);
   }
 
   return response;

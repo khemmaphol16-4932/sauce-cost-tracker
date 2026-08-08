@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentBusinessId } from "@/lib/data/businesses";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -46,10 +47,13 @@ export async function createRecipe(formData: FormData): Promise<ActionResult> {
     return { error: "Name, bottle size, and batch volume are required" };
   }
 
+  const businessId = await getCurrentBusinessId();
+
   const { data, error } = await supabase
     .from("recipes")
     .insert({
       user_id: user.id,
+      business_id: businessId,
       name,
       bottle_size_ml: bottleSizeMl,
       batch_volume_ml: batchVolumeMl,

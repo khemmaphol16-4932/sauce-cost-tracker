@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentBusinessId } from "@/lib/data/businesses";
 
 export type RecipeSummary = {
   id: string;
@@ -9,9 +10,11 @@ export type RecipeSummary = {
 
 export async function getRecipes(): Promise<RecipeSummary[]> {
   const supabase = await createClient();
+  const businessId = await getCurrentBusinessId();
   const { data, error } = await supabase
     .from("recipes")
     .select("id, name, bottle_size_ml, target_sell_price")
+    .eq("business_id", businessId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return data ?? [];
@@ -60,6 +63,7 @@ export async function getRecipeDetail(id: string): Promise<{
   sopSteps: SopStepRow[];
 } | null> {
   const supabase = await createClient();
+  const businessId = await getCurrentBusinessId();
 
   const [
     { data: recipe, error: recipeError },
@@ -67,7 +71,7 @@ export async function getRecipeDetail(id: string): Promise<{
     { data: packaging, error: pkgError },
     { data: sopSteps, error: sopError },
   ] = await Promise.all([
-    supabase.from("recipes").select("*").eq("id", id).maybeSingle(),
+    supabase.from("recipes").select("*").eq("id", id).eq("business_id", businessId).maybeSingle(),
     supabase
       .from("recipe_ingredients")
       .select("id, ingredient_id, qty_used, ingredients(name, unit, avg_price_per_unit)")

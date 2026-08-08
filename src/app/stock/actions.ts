@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentBusinessId } from "@/lib/data/businesses";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -24,8 +25,11 @@ export async function addIngredient(formData: FormData): Promise<ActionResult> {
 
   if (!name || !unit) return { error: "Name and unit are required" };
 
+  const businessId = await getCurrentBusinessId();
+
   const { error } = await supabase.from("ingredients").insert({
     user_id: user.id,
+    business_id: businessId,
     name,
     unit,
     low_stock_threshold: thresholdRaw ? Number(thresholdRaw) : null,

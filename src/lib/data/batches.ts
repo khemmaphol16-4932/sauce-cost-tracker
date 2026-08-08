@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentBusinessId } from "@/lib/data/businesses";
 
 export type BatchHistoryRow = {
   id: string;
@@ -17,9 +18,11 @@ export type RecipeYieldActuals = {
 
 export async function getYieldActualsByRecipe(): Promise<RecipeYieldActuals[]> {
   const supabase = await createClient();
+  const businessId = await getCurrentBusinessId();
   const { data, error } = await supabase
     .from("batches")
-    .select("recipe_id, actual_yield_bottles")
+    .select("recipe_id, actual_yield_bottles, recipes!inner(business_id)")
+    .eq("recipes.business_id", businessId)
     .not("actual_yield_bottles", "is", null);
   if (error) throw new Error(error.message);
 
@@ -40,9 +43,13 @@ export async function getYieldActualsByRecipe(): Promise<RecipeYieldActuals[]> {
 
 export async function getBatchHistory(): Promise<BatchHistoryRow[]> {
   const supabase = await createClient();
+  const businessId = await getCurrentBusinessId();
   const { data, error } = await supabase
     .from("batches")
-    .select("id, batch_date, actual_yield_bottles, cost_per_bottle_snapshot, notes, recipes(name)")
+    .select(
+      "id, batch_date, actual_yield_bottles, cost_per_bottle_snapshot, notes, recipes!inner(name, business_id)"
+    )
+    .eq("recipes.business_id", businessId)
     .order("batch_date", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);

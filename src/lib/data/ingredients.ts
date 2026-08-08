@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentBusinessId } from "@/lib/data/businesses";
 
 export type IngredientWithLastPurchase = {
   id: string;
@@ -17,18 +18,26 @@ export async function getIngredientsWithLastPurchase(): Promise<
   IngredientWithLastPurchase[]
 > {
   const supabase = await createClient();
+  const businessId = await getCurrentBusinessId();
 
-  const [{ data: ingredients, error: ingredientsError }, { data: purchases, error: purchasesError }] =
-    await Promise.all([
-      supabase.from("ingredients").select("*").order("name", { ascending: true }),
-      supabase
-        .from("purchases")
-        .select("ingredient_id, purchase_date, qty_bought, price_paid_total, created_at")
-        .order("purchase_date", { ascending: true })
-        .order("created_at", { ascending: true }),
-    ]);
-
+  const { data: ingredients, error: ingredientsError } = await supabase
+    .from("ingredients")
+    .select("*")
+    .eq("business_id", businessId)
+    .order("name", { ascending: true });
   if (ingredientsError) throw new Error(ingredientsError.message);
+
+  const ingredientIds = (ingredients ?? []).map((i) => i.id);
+
+  const { data: purchases, error: purchasesError } =
+    ingredientIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("purchases")
+          .select("ingredient_id, purchase_date, qty_bought, price_paid_total, created_at")
+          .in("ingredient_id", ingredientIds)
+          .order("purchase_date", { ascending: true })
+          .order("created_at", { ascending: true });
   if (purchasesError) throw new Error(purchasesError.message);
 
   const lastPurchaseByIngredient = new Map<string, string>();
@@ -77,9 +86,11 @@ export type IngredientOption = {
 
 export async function getIngredientOptions(): Promise<IngredientOption[]> {
   const supabase = await createClient();
+  const businessId = await getCurrentBusinessId();
   const { data, error } = await supabase
     .from("ingredients")
     .select("id, name, unit, avg_price_per_unit")
+    .eq("business_id", businessId)
     .order("name", { ascending: true });
   if (error) throw new Error(error.message);
   return data ?? [];

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentBusinessId } from "@/lib/data/businesses";
 import { getRecipes, getRecipeDetail } from "@/lib/data/recipes";
-import { calcRecipeCost } from "@/lib/costing";
+import { calcRecipeCost, calcSaleMargin } from "@/lib/costing";
 
 export type MonthlySpend = { month: string; total: number };
 export type RecipeMargin = {
@@ -24,6 +24,13 @@ export type RecentBatch = {
   actual_yield_bottles: number | null;
   cost_per_bottle_snapshot: number | null;
 };
+export type BestSeller = {
+  recipe_id: string;
+  recipe_name: string;
+  qtySold: number;
+  revenue: number;
+};
+export type RealMarginMonth = { month: string; marginPct: number | null };
 
 export type DashboardData = {
   ingredientCount: number;
@@ -32,10 +39,13 @@ export type DashboardData = {
   totalStockValue: number;
   lowStockCount: number;
   priceJumpCount: number;
+  revenueTotal: number;
   monthlySpend: MonthlySpend[];
   recipeMargins: RecipeMargin[];
   recentPurchases: RecentPurchase[];
   recentBatches: RecentBatch[];
+  bestSellers: BestSeller[];
+  realMarginTrend: RealMarginMonth[];
 };
 
 const MONTH_LABELS = [
@@ -159,6 +169,77 @@ export async function getDashboardData(): Promise<DashboardData> {
     cost_per_bottle_snapshot: b.cost_per_bottle_snapshot,
   }));
 
+  const { data: salesRaw, error: salesError } = await supabase
+    .from("sales")
+    .select(
+      "recipe_id, qty_bottles, price_charged_total, platform_fee_pct, cost_per_bottle_snapshot, sale_date, recipes(name)"
+    )
+    .eq("business_id", businessId);
+  if (salesError) throw new Error(salesError.message);
+
+  type RawSale = {
+    recipe_id: string;
+    qty_bottles: number;
+    price_charged_total: number;
+    platform_fee_pct: number | null;
+    cost_per_bottle_snapshot: number | null;
+    sale_date: string;
+    recipes: { name: string } | null;
+  };
+  const sales = (salesRaw ?? []) as unknown as RawSale[];
+
+  const revenueTotal = sales.reduce((sum, s) => sum + s.price_charged_total, 0);
+
+  const bestSellerMap = new Map<string, BestSeller>();
+  for (const s of sales) {
+    const entry = bestSellerMap.get(s.recipe_id) ?? {
+      recipe_id: s.recipe_id,
+      recipe_name: s.recipes?.name ?? "(deleted recipe)",
+      qtySold: 0,
+      revenue: 0,
+    };
+    entry.qtySold += s.qty_bottles;
+    entry.revenue += s.price_charged_total;
+    bestSellerMap.set(s.recipe_id, entry);
+  }
+  const bestSellers = Array.from(bestSellerMap.values())
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5);
+
+  const realMarginTrend: RealMarginMonth[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i);
+    const label = `${MONTH_LABELS[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`;
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const monthSales = sales.filter(
+      (s) => s.sale_date.slice(0, 7) === monthKey && s.cost_per_bottle_snapshot != null
+    );
+    if (monthSales.length === 0) {
+      realMarginTrend.push({ month: label, marginPct: null });
+      continue;
+    }
+    let totalRevenue = 0;
+    let totalProfit = 0;
+    for (const s of monthSales) {
+      const margin = calcSaleMargin(
+        {
+          price_charged_total: s.price_charged_total,
+          qty_bottles: s.qty_bottles,
+          platform_fee_pct: s.platform_fee_pct,
+        },
+        s.cost_per_bottle_snapshot as number
+      );
+      totalRevenue += s.price_charged_total;
+      totalProfit += margin.profitPerBottle * s.qty_bottles;
+    }
+    realMarginTrend.push({
+      month: label,
+      marginPct: totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : null,
+    });
+  }
+
   const recipeIds = recipeSummaries.map((r) => r.id);
   let batchCount = 0;
   if (recipeIds.length > 0) {
@@ -177,10 +258,13 @@ export async function getDashboardData(): Promise<DashboardData> {
     totalStockValue,
     lowStockCount,
     priceJumpCount,
+    revenueTotal,
     monthlySpend,
     recipeMargins,
     recentPurchases,
     recentBatches,
+    bestSellers,
+    realMarginTrend,
   };
 }
 

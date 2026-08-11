@@ -9,11 +9,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { MonthlySpend, RecipeMargin } from "@/lib/data/dashboard";
+import type { MonthlySpend, RecipeMargin, RealMarginMonth } from "@/lib/data/dashboard";
 
 const GRID_BORDER = "#2c2c2e";
 const TEXT_SECONDARY = "#98989d";
 const ACCENT = "#00e5ff";
+const SUCCESS = "#16a34a";
 
 const INDICATOR_COLOR: Record<RecipeMargin["indicator"], string> = {
   red: "#ff453a",
@@ -74,6 +75,47 @@ export function MonthlySpendChart({ data }: { data: MonthlySpend[] }) {
             content={<ChartTooltip formatValue={(v) => `฿${v.toFixed(2)}`} />}
           />
           <Bar dataKey="total" fill={ACCENT} radius={[4, 4, 0, 0]} maxBarSize={36} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export function RealMarginChart({ data }: { data: RealMarginMonth[] }) {
+  const hasData = data.some((d) => d.marginPct != null);
+
+  if (!hasData) {
+    return (
+      <p className="flex h-48 items-center justify-center text-sm text-text-secondary">
+        No sales logged in the last 6 months.
+      </p>
+    );
+  }
+
+  const chartData = data.map((d) => ({ month: d.month, marginPct: d.marginPct ?? 0 }));
+
+  return (
+    <div className="h-48 w-full" role="img" aria-label="Real profit margin percentage, last 6 months">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <XAxis
+            dataKey="month"
+            tick={{ fill: TEXT_SECONDARY, fontSize: 11 }}
+            axisLine={{ stroke: GRID_BORDER }}
+            tickLine={false}
+          />
+          <YAxis
+            tick={{ fill: TEXT_SECONDARY, fontSize: 11 }}
+            axisLine={false}
+            tickLine={false}
+            width={40}
+            tickFormatter={(v: number) => `${v}%`}
+          />
+          <Tooltip
+            cursor={{ fill: GRID_BORDER, opacity: 0.4 }}
+            content={<ChartTooltip formatValue={(v) => `${v.toFixed(0)}% margin`} />}
+          />
+          <Bar dataKey="marginPct" fill={SUCCESS} radius={[4, 4, 0, 0]} maxBarSize={36} />
         </BarChart>
       </ResponsiveContainer>
     </div>

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Modal } from "@/components/modal";
 import { ConfirmModal } from "@/components/confirm-modal";
-import { deleteSale } from "./actions";
+import { deleteSale, updateSale } from "./actions";
 import type { SaleRow } from "@/lib/data/sales";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -12,8 +13,21 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export function SaleListRow({ sale }: { sale: SaleRow }) {
+  const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const submitEdit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    setError(null);
+    startTransition(async () => {
+      const result = await updateSale(formData);
+      if (result?.error) setError(result.error);
+      else setEditOpen(false);
+    });
+  };
 
   const onVoid = () => {
     const formData = new FormData();
@@ -26,7 +40,7 @@ export function SaleListRow({ sale }: { sale: SaleRow }) {
   return (
     <li className="border-b border-border py-3 last:border-0">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
+        <button onClick={() => setEditOpen(true)} className="min-w-0 flex-1 text-left">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium text-text">{sale.recipe_name}</span>
             <span
@@ -43,7 +57,7 @@ export function SaleListRow({ sale }: { sale: SaleRow }) {
             {sale.platform} · {sale.sale_date}
           </p>
           {sale.notes && <p className="mt-1 text-sm text-text-secondary">{sale.notes}</p>}
-        </div>
+        </button>
         <button
           onClick={() => setConfirmOpen(true)}
           disabled={isPending}
@@ -52,6 +66,62 @@ export function SaleListRow({ sale }: { sale: SaleRow }) {
           Void
         </button>
       </div>
+
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title={`Edit sale — ${sale.recipe_name}`}>
+        <form onSubmit={submitEdit} className="space-y-4">
+          <input type="hidden" name="id" value={sale.id} />
+          <p className="text-xs text-text-secondary">
+            Quantity and price can&apos;t be edited here — void this sale and log a new one if
+            those need to change.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">Payment status</label>
+            <select
+              name="payment_status"
+              defaultValue={sale.payment_status}
+              className="mt-1 w-full field-input"
+            >
+              <option value="paid">Paid</option>
+              <option value="pending">Pending</option>
+              <option value="refunded">Refunded</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">
+              Payment method (optional)
+            </label>
+            <input
+              name="payment_method"
+              defaultValue={sale.payment_method ?? ""}
+              placeholder="cash, transfer, cod…"
+              className="mt-1 w-full field-input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">Date</label>
+            <input
+              name="sale_date"
+              type="date"
+              defaultValue={sale.sale_date}
+              required
+              className="mt-1 w-full field-input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">Notes</label>
+            <textarea
+              name="notes"
+              rows={2}
+              defaultValue={sale.notes ?? ""}
+              className="mt-1 w-full field-input"
+            />
+          </div>
+          {error && <p className="text-sm text-alert">{error}</p>}
+          <button type="submit" disabled={isPending} className="w-full btn-primary">
+            {isPending ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </Modal>
 
       <ConfirmModal
         open={confirmOpen}

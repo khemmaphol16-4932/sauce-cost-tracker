@@ -10,9 +10,13 @@ export default async function StockPage() {
     getIngredientsWithLastPurchase(),
     getFinishedGoodsStock(),
   ]);
-  const lowStockCount = ingredients.filter(
+  const lowIngredientCount = ingredients.filter(
     (i) => i.low_stock_threshold != null && i.qty_on_hand < i.low_stock_threshold
   ).length;
+  const lowFinishedGoodsCount = finishedGoods.filter(
+    (fg) => fg.low_stock_threshold != null && fg.qty_on_hand < fg.low_stock_threshold
+  ).length;
+  const lowStockCount = lowIngredientCount + lowFinishedGoodsCount;
 
   return (
     <div className="space-y-4">

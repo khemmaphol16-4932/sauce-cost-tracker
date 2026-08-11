@@ -69,6 +69,35 @@ export async function logSale(formData: FormData): Promise<ActionResult> {
   revalidatePath("/dashboard");
 }
 
+export async function updateSale(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await requireUser();
+
+  const id = String(formData.get("id"));
+  const paymentStatus = String(formData.get("payment_status") ?? "paid").trim() || "paid";
+  const paymentMethod = String(formData.get("payment_method") ?? "").trim();
+  const saleDateRaw = String(formData.get("sale_date") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  if (!saleDateRaw) return { error: "Date is required" };
+
+  // Deliberately never touches qty_bottles or recipe_id — changing quantity
+  // after the fact would need the same delta-reconciliation batches' yield
+  // edits require; void + re-log is the supported path for that instead.
+  const { error } = await supabase
+    .from("sales")
+    .update({
+      payment_status: paymentStatus,
+      payment_method: paymentMethod || null,
+      sale_date: saleDateRaw,
+      notes: notes || null,
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/sales");
+  revalidatePath("/dashboard");
+}
+
 export async function deleteSale(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
   const id = String(formData.get("id"));
@@ -102,6 +131,39 @@ export async function deleteSale(formData: FormData): Promise<ActionResult> {
   revalidatePath("/sales");
   revalidatePath("/stock");
   revalidatePath("/dashboard");
+}
+
+export async function updateFinishedGoodsThreshold(formData: FormData): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+
+  const recipeId = String(formData.get("recipe_id"));
+  const thresholdRaw = String(formData.get("low_stock_threshold") ?? "").trim();
+  if (!recipeId) return { error: "Recipe is required" };
+
+  const threshold = thresholdRaw ? Number(thresholdRaw) : null;
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("finished_goods_stock")
+    .select("id")
+    .eq("recipe_id", recipeId)
+    .maybeSingle();
+  if (fetchError) return { error: fetchError.message };
+
+  if (existing) {
+    const { error } = await supabase
+      .from("finished_goods_stock")
+      .update({ low_stock_threshold: threshold })
+      .eq("recipe_id", recipeId);
+    if (error) return { error: error.message };
+  } else {
+    const { error } = await supabase
+      .from("finished_goods_stock")
+      .insert({ user_id: user.id, recipe_id: recipeId, low_stock_threshold: threshold });
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath("/stock");
+  revalidatePath("/stock/low");
 }
 
 export async function adjustFinishedGoods(formData: FormData): Promise<ActionResult> {

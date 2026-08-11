@@ -70,9 +70,21 @@ export async function getDashboardData(): Promise<DashboardData> {
     (sum, i) => sum + i.qty_on_hand * i.avg_price_per_unit,
     0
   );
-  const lowStockCount = (ingredients ?? []).filter(
+  const lowIngredientCount = (ingredients ?? []).filter(
     (i) => i.low_stock_threshold != null && i.qty_on_hand < i.low_stock_threshold
   ).length;
+
+  const { data: finishedGoods, error: finishedGoodsError } = await supabase
+    .from("finished_goods_stock")
+    .select("qty_on_hand, low_stock_threshold, recipes!inner(business_id)")
+    .eq("recipes.business_id", businessId);
+  if (finishedGoodsError) throw new Error(finishedGoodsError.message);
+
+  const lowFinishedGoodsCount = (finishedGoods ?? []).filter(
+    (fg) => fg.low_stock_threshold != null && fg.qty_on_hand < fg.low_stock_threshold
+  ).length;
+
+  const lowStockCount = lowIngredientCount + lowFinishedGoodsCount;
 
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);

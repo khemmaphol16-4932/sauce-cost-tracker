@@ -78,6 +78,21 @@ export function calcRecipeCost(
   };
 }
 
+export type SaleMarginInputs = {
+  price_charged_total: number;
+  qty_bottles: number;
+  platform_fee_pct: number | null;
+};
+
+export function calcSaleMargin(sale: SaleMarginInputs, costPerBottle: number) {
+  const pricePerBottle = sale.qty_bottles > 0 ? sale.price_charged_total / sale.qty_bottles : 0;
+  const feeAmount = pricePerBottle * ((sale.platform_fee_pct ?? 0) / 100);
+  const profitPerBottle = pricePerBottle - feeAmount - costPerBottle;
+  const marginPct = pricePerBottle > 0 ? (profitPerBottle / pricePerBottle) * 100 : 0;
+
+  return { pricePerBottle, feeAmount, profitPerBottle, marginPct };
+}
+
 export const PLATFORM_FEE_PRESETS = [
   { label: "Self-sell (0%)", value: 0 },
   { label: "TikTok Shop (~5%)", value: 5 },

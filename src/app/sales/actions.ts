@@ -1,0 +1,142 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentBusinessId } from "@/lib/data/businesses";
+import { getRecipeDetail } from "@/lib/data/recipes";
+import { calcRecipeCost } from "@/lib/costing";
+import { revalidatePath } from "next/cache";
+
+type ActionResult = { error: string } | undefined;
+
+async function requireUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+  return { supabase, user };
+}
+
+export async function logSale(formData: FormData): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+
+  const recipeId = String(formData.get("recipe_id"));
+  if (!recipeId) return { error: "Pick a recipe" };
+
+  const qtyBottles = Number(formData.get("qty_bottles"));
+  const priceChargedTotal = Number(formData.get("price_charged_total"));
+  if (!(qtyBottles > 0) || !(priceChargedTotal >= 0)) {
+    return { error: "Valid quantity and price are required" };
+  }
+
+  const platform = String(formData.get("platform") ?? "self").trim() || "self";
+  const platformFeeRaw = String(formData.get("platform_fee_pct") ?? "").trim();
+  const platformFeePct = platformFeeRaw ? Number(platformFeeRaw) : null;
+  const paymentStatus = String(formData.get("payment_status") ?? "paid").trim() || "paid";
+  const paymentMethod = String(formData.get("payment_method") ?? "").trim();
+  const saleDateRaw = String(formData.get("sale_date") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  const detail = await getRecipeDetail(recipeId);
+  if (!detail) return { error: "Recipe not found" };
+
+  const cost = calcRecipeCost(
+    detail.recipe,
+    detail.ingredients.map((i) => ({ qty_used: i.qty_used, avg_price_per_unit: i.avg_price_per_unit })),
+    detail.packaging.map((p) => ({ cost_per_unit: p.cost_per_unit }))
+  );
+
+  const businessId = await getCurrentBusinessId();
+
+  const { error } = await supabase.from("sales").insert({
+    user_id: user.id,
+    business_id: businessId,
+    recipe_id: recipeId,
+    qty_bottles: qtyBottles,
+    price_charged_total: priceChargedTotal,
+    platform,
+    platform_fee_pct: platformFeePct,
+    payment_status: paymentStatus,
+    payment_method: paymentMethod || null,
+    sale_date: saleDateRaw || undefined,
+    cost_per_bottle_snapshot: cost.costPerBottle,
+    notes: notes || null,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/sales");
+  revalidatePath("/stock");
+  revalidatePath("/dashboard");
+}
+
+export async function deleteSale(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id"));
+
+  const { data: sale, error: fetchError } = await supabase
+    .from("sales")
+    .select("recipe_id, qty_bottles")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError) return { error: fetchError.message };
+  if (!sale) return { error: "Sale not found" };
+
+  const { error: deleteError } = await supabase.from("sales").delete().eq("id", id);
+  if (deleteError) return { error: deleteError.message };
+
+  const { data: stock, error: stockError } = await supabase
+    .from("finished_goods_stock")
+    .select("qty_on_hand")
+    .eq("recipe_id", sale.recipe_id)
+    .maybeSingle();
+  if (stockError) return { error: stockError.message };
+
+  if (stock) {
+    const { error: creditError } = await supabase
+      .from("finished_goods_stock")
+      .update({ qty_on_hand: stock.qty_on_hand + sale.qty_bottles })
+      .eq("recipe_id", sale.recipe_id);
+    if (creditError) return { error: creditError.message };
+  }
+
+  revalidatePath("/sales");
+  revalidatePath("/stock");
+  revalidatePath("/dashboard");
+}
+
+export async function adjustFinishedGoods(formData: FormData): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+
+  const recipeId = String(formData.get("recipe_id"));
+  const delta = Number(formData.get("delta"));
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!recipeId || !Number.isFinite(delta) || delta === 0) {
+    return { error: "Pick a recipe and a non-zero adjustment amount" };
+  }
+  if (!reason) return { error: "A reason is required (e.g. breakage, sample, miscounted)" };
+
+  const { data: stock, error: fetchError } = await supabase
+    .from("finished_goods_stock")
+    .select("qty_on_hand")
+    .eq("recipe_id", recipeId)
+    .maybeSingle();
+  if (fetchError) return { error: fetchError.message };
+
+  const newQty = Math.max(0, (stock?.qty_on_hand ?? 0) + delta);
+
+  if (stock) {
+    const { error } = await supabase
+      .from("finished_goods_stock")
+      .update({ qty_on_hand: newQty })
+      .eq("recipe_id", recipeId);
+    if (error) return { error: error.message };
+  } else {
+    const { error } = await supabase
+      .from("finished_goods_stock")
+      .insert({ user_id: user.id, recipe_id: recipeId, qty_on_hand: newQty });
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath("/stock");
+  revalidatePath("/sales");
+}

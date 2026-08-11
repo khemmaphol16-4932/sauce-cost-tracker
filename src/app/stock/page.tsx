@@ -3,6 +3,7 @@ import { getIngredientsWithLastPurchase } from "@/lib/data/ingredients";
 import { getFinishedGoodsStock } from "@/lib/data/finished-goods";
 import { IngredientRow } from "./ingredient-row";
 import { AddIngredientButton } from "./add-ingredient-button";
+import { FinishedGoodsRow } from "./finished-goods-row";
 
 export default async function StockPage() {
   const [ingredients, finishedGoods] = await Promise.all([
@@ -34,10 +35,7 @@ export default async function StockPage() {
           <h2 className="mb-2 text-sm font-semibold text-text">Bottles in stock</h2>
           <ul className="divide-y divide-border">
             {finishedGoods.map((fg) => (
-              <li key={fg.id} className="flex items-center justify-between py-2 text-sm">
-                <span className="min-w-0 flex-1 truncate text-text">{fg.recipe_name}</span>
-                <span className="font-mono text-text-secondary">{fg.qty_on_hand}</span>
-              </li>
+              <FinishedGoodsRow key={fg.id} item={fg} />
             ))}
           </ul>
         </div>

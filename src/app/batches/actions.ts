@@ -58,20 +58,54 @@ export async function updateBatch(formData: FormData): Promise<ActionResult> {
   const batchDateRaw = String(formData.get("batch_date") ?? "").trim();
   const yieldRaw = String(formData.get("actual_yield_bottles") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
+  const newYield = Number(yieldRaw);
 
-  if (!batchDateRaw || !(Number(yieldRaw) > 0)) {
+  if (!batchDateRaw || !(newYield > 0)) {
     return { error: "Date and a bottle yield greater than 0 are required" };
   }
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("batches")
+    .select("recipe_id, actual_yield_bottles")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError) return { error: fetchError.message };
+  if (!existing) return { error: "Batch not found" };
 
   const { error } = await supabase
     .from("batches")
     .update({
       batch_date: batchDateRaw,
-      actual_yield_bottles: Number(yieldRaw),
+      actual_yield_bottles: newYield,
       notes: notes || null,
     })
     .eq("id", id);
   if (error) return { error: error.message };
 
+  const oldYield = existing.actual_yield_bottles ?? 0;
+  const delta = newYield - oldYield;
+  if (delta !== 0) {
+    const { data: stock, error: stockError } = await supabase
+      .from("finished_goods_stock")
+      .select("qty_on_hand")
+      .eq("recipe_id", existing.recipe_id)
+      .maybeSingle();
+    if (stockError) return { error: stockError.message };
+
+    if (stock) {
+      const { error: adjustError } = await supabase
+        .from("finished_goods_stock")
+        .update({ qty_on_hand: stock.qty_on_hand + delta })
+        .eq("recipe_id", existing.recipe_id);
+      if (adjustError) return { error: adjustError.message };
+    } else {
+      const { error: insertError } = await supabase
+        .from("finished_goods_stock")
+        .insert({ user_id: user.id, recipe_id: existing.recipe_id, qty_on_hand: Math.max(0, delta) });
+      if (insertError) return { error: insertError.message };
+    }
+  }
+
   revalidatePath("/batches");
+  revalidatePath("/stock");
 }

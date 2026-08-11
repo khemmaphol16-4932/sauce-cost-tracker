@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { getIngredientsWithLastPurchase } from "@/lib/data/ingredients";
+import { getFinishedGoodsStock } from "@/lib/data/finished-goods";
 import { IngredientRow } from "./ingredient-row";
 import { AddIngredientButton } from "./add-ingredient-button";
 
 export default async function StockPage() {
-  const ingredients = await getIngredientsWithLastPurchase();
+  const [ingredients, finishedGoods] = await Promise.all([
+    getIngredientsWithLastPurchase(),
+    getFinishedGoodsStock(),
+  ]);
   const lowStockCount = ingredients.filter(
     (i) => i.low_stock_threshold != null && i.qty_on_hand < i.low_stock_threshold
   ).length;
@@ -24,6 +28,20 @@ export default async function StockPage() {
           </Link>
         )}
       </div>
+
+      {finishedGoods.length > 0 && (
+        <div className="card">
+          <h2 className="mb-2 text-sm font-semibold text-text">Bottles in stock</h2>
+          <ul className="divide-y divide-border">
+            {finishedGoods.map((fg) => (
+              <li key={fg.id} className="flex items-center justify-between py-2 text-sm">
+                <span className="min-w-0 flex-1 truncate text-text">{fg.recipe_name}</span>
+                <span className="font-mono text-text-secondary">{fg.qty_on_hand}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {ingredients.length === 0 ? (
         <p className="py-8 text-center text-sm text-text-secondary">

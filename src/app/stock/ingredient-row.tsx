@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Modal } from "@/components/modal";
+import { ConfirmModal } from "@/components/confirm-modal";
 import { deleteIngredient, logPurchase, updateIngredient } from "./actions";
 import type { IngredientWithLastPurchase } from "@/lib/data/ingredients";
 
@@ -10,6 +11,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPurchase }) {
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +42,6 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
   };
 
   const onDelete = () => {
-    if (!confirm(`Delete "${ingredient.name}"? This cannot be undone.`)) return;
     const formData = new FormData();
     formData.set("id", ingredient.id);
     startTransition(async () => {
@@ -180,7 +181,7 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
             </button>
             <button
               type="button"
-              onClick={onDelete}
+              onClick={() => setDeleteConfirmOpen(true)}
               disabled={isPending}
               className="rounded-xl border border-alert/40 px-4 py-3 text-base font-medium text-alert"
             >
@@ -189,6 +190,19 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
           </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={() => {
+          setDeleteConfirmOpen(false);
+          setEditOpen(false);
+          onDelete();
+        }}
+        title="Delete ingredient"
+        message={`Delete "${ingredient.name}"? This cannot be undone.`}
+        isPending={isPending}
+      />
     </li>
   );
 }

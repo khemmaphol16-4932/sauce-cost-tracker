@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import {
   addPackagingCost,
   addRecipeIngredient,
@@ -22,6 +22,24 @@ import { calcRecipeCost, PLATFORM_FEE_PRESETS } from "@/lib/costing";
 import type { RecipeDetail, RecipeIngredientRow, PackagingCostRow, SopStepRow } from "@/lib/data/recipes";
 import type { IngredientOption } from "@/lib/data/ingredients";
 import type { SopTemplateRow } from "@/lib/data/sop-templates";
+import { ConfirmModal } from "@/components/confirm-modal";
+
+type IngredientAction =
+  | { type: "add"; item: RecipeIngredientRow }
+  | { type: "remove"; id: string };
+
+type PackagingAction =
+  | { type: "add"; item: PackagingCostRow }
+  | { type: "remove"; id: string };
+
+type SopStepAction =
+  | { type: "add"; item: SopStepRow }
+  | { type: "remove"; id: string };
+
+const tempId = () =>
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `temp-${Date.now()}-${Math.random()}`;
 
 const INDICATOR_STYLES = {
   red: "bg-alert-bg text-alert",
@@ -47,6 +65,23 @@ export function RecipeEditor({
   const [draft, setDraft] = useState(recipe);
   const [isPending, startTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  const [optimisticIngredients, dispatchIngredients] = useOptimistic(
+    ingredients,
+    (state: RecipeIngredientRow[], action: IngredientAction) =>
+      action.type === "add" ? [...state, action.item] : state.filter((i) => i.id !== action.id)
+  );
+  const [optimisticPackaging, dispatchPackaging] = useOptimistic(
+    packaging,
+    (state: PackagingCostRow[], action: PackagingAction) =>
+      action.type === "add" ? [...state, action.item] : state.filter((p) => p.id !== action.id)
+  );
+  const [optimisticSopSteps, dispatchSopSteps] = useOptimistic(
+    sopSteps,
+    (state: SopStepRow[], action: SopStepAction) =>
+      action.type === "add" ? [...state, action.item] : state.filter((s) => s.id !== action.id)
+  );
 
   const isCustomFee = !PLATFORM_FEE_PRESETS.some((p) => p.value === draft.platform_fee_pct);
 
@@ -54,10 +89,13 @@ export function RecipeEditor({
     () =>
       calcRecipeCost(
         draft,
-        ingredients.map((i) => ({ qty_used: i.qty_used, avg_price_per_unit: i.avg_price_per_unit })),
-        packaging.map((p) => ({ cost_per_unit: p.cost_per_unit }))
+        optimisticIngredients.map((i) => ({
+          qty_used: i.qty_used,
+          avg_price_per_unit: i.avg_price_per_unit,
+        })),
+        optimisticPackaging.map((p) => ({ cost_per_unit: p.cost_per_unit }))
       ),
-    [draft, ingredients, packaging]
+    [draft, optimisticIngredients, optimisticPackaging]
   );
 
   const set = <K extends keyof RecipeDetail>(key: K, value: RecipeDetail[K]) =>
@@ -87,7 +125,6 @@ export function RecipeEditor({
   };
 
   const onDeleteRecipe = () => {
-    if (!confirm(`Delete recipe "${draft.name}"? This cannot be undone.`)) return;
     const formData = new FormData();
     formData.set("id", draft.id);
     startTransition(async () => {
@@ -233,7 +270,7 @@ export function RecipeEditor({
             {isPending ? "Saving…" : "Save recipe"}
           </button>
           <button
-            onClick={onDeleteRecipe}
+            onClick={() => setDeleteConfirmOpen(true)}
             disabled={isPending}
             className="rounded-xl border border-alert/40 px-4 py-3 text-base font-medium text-alert"
           >
@@ -242,56 +279,69 @@ export function RecipeEditor({
         </div>
       </div>
 
+      <ConfirmModal
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={() => {
+          setDeleteConfirmOpen(false);
+          onDeleteRecipe();
+        }}
+        title="Delete recipe"
+        message={`Delete recipe "${draft.name}"? This cannot be undone.`}
+        isPending={isPending}
+      />
+
       {/* Ingredients */}
       <div className="card">
         <h2 className="mb-2 text-sm font-semibold text-text">Ingredients</h2>
         <ul className="mb-3 divide-y divide-border">
-          {ingredients.map((ri) => (
-            <IngredientLine key={ri.id} recipeId={recipe.id} ri={ri} />
+          {optimisticIngredients.map((ri) => (
+            <IngredientLine key={ri.id} recipeId={recipe.id} ri={ri} dispatch={dispatchIngredients} />
           ))}
-          {ingredients.length === 0 && (
+          {optimisticIngredients.length === 0 && (
             <p className="py-2 text-sm text-text-secondary">No ingredients added yet.</p>
           )}
         </ul>
-        <AddIngredientForm recipeId={recipe.id} options={ingredientOptions} />
+        <AddIngredientForm recipeId={recipe.id} options={ingredientOptions} dispatch={dispatchIngredients} />
       </div>
 
       {/* Packaging */}
       <div className="card">
         <h2 className="mb-2 text-sm font-semibold text-text">Packaging costs</h2>
         <ul className="mb-3 divide-y divide-border">
-          {packaging.map((p) => (
-            <PackagingLine key={p.id} recipeId={recipe.id} item={p} />
+          {optimisticPackaging.map((p) => (
+            <PackagingLine key={p.id} recipeId={recipe.id} item={p} dispatch={dispatchPackaging} />
           ))}
-          {packaging.length === 0 && (
+          {optimisticPackaging.length === 0 && (
             <p className="py-2 text-sm text-text-secondary">No packaging items added yet.</p>
           )}
         </ul>
-        <AddPackagingForm recipeId={recipe.id} />
+        <AddPackagingForm recipeId={recipe.id} dispatch={dispatchPackaging} />
       </div>
 
       {/* SOP */}
       <div className="card">
         <h2 className="mb-2 text-sm font-semibold text-text">Production SOP</h2>
         <ol className="mb-3 divide-y divide-border">
-          {sopSteps.map((step, i) => (
+          {optimisticSopSteps.map((step, i) => (
             <SopStepLine
               key={step.id}
               recipeId={recipe.id}
               step={step}
               index={i + 1}
               isFirst={i === 0}
-              isLast={i === sopSteps.length - 1}
+              isLast={i === optimisticSopSteps.length - 1}
+              dispatch={dispatchSopSteps}
             />
           ))}
-          {sopSteps.length === 0 && (
+          {optimisticSopSteps.length === 0 && (
             <p className="py-2 text-sm text-text-secondary">No steps added yet.</p>
           )}
         </ol>
         {sopTemplates.length > 0 && (
-          <InsertTemplateForm recipeId={recipe.id} templates={sopTemplates} />
+          <InsertTemplateForm recipeId={recipe.id} templates={sopTemplates} dispatch={dispatchSopSteps} />
         )}
-        <AddSopStepForm recipeId={recipe.id} />
+        <AddSopStepForm recipeId={recipe.id} dispatch={dispatchSopSteps} />
       </div>
 
       {/* SOP step templates */}
@@ -364,7 +414,15 @@ function NumberInput({
   );
 }
 
-function IngredientLine({ recipeId, ri }: { recipeId: string; ri: RecipeIngredientRow }) {
+function IngredientLine({
+  recipeId,
+  ri,
+  dispatch,
+}: {
+  recipeId: string;
+  ri: RecipeIngredientRow;
+  dispatch: (action: IngredientAction) => void;
+}) {
   const [qty, setQty] = useState(ri.qty_used);
   const [isPending, startTransition] = useTransition();
 
@@ -383,6 +441,7 @@ function IngredientLine({ recipeId, ri }: { recipeId: string; ri: RecipeIngredie
     formData.set("id", ri.id);
     formData.set("recipe_id", recipeId);
     startTransition(async () => {
+      dispatch({ type: "remove", id: ri.id });
       await removeRecipeIngredient(formData);
     });
   };
@@ -417,9 +476,11 @@ function IngredientLine({ recipeId, ri }: { recipeId: string; ri: RecipeIngredie
 function AddIngredientForm({
   recipeId,
   options,
+  dispatch,
 }: {
   recipeId: string;
   options: IngredientOption[];
+  dispatch: (action: IngredientAction) => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -427,11 +488,28 @@ function AddIngredientForm({
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const ingredientId = String(formData.get("ingredient_id") ?? "");
+    const qtyUsed = Number(formData.get("qty_used"));
+    const option = options.find((o) => o.id === ingredientId);
     setError(null);
     startTransition(async () => {
+      if (option && qtyUsed > 0) {
+        dispatch({
+          type: "add",
+          item: {
+            id: tempId(),
+            ingredient_id: option.id,
+            qty_used: qtyUsed,
+            ingredient_name: option.name,
+            ingredient_unit: option.unit,
+            avg_price_per_unit: option.avg_price_per_unit,
+          },
+        });
+      }
       const result = await addRecipeIngredient(formData);
       if (result?.error) setError(result.error);
-      else (e.target as HTMLFormElement).reset();
+      else form.reset();
     });
   };
 
@@ -482,7 +560,15 @@ function AddIngredientForm({
   );
 }
 
-function PackagingLine({ recipeId, item }: { recipeId: string; item: PackagingCostRow }) {
+function PackagingLine({
+  recipeId,
+  item,
+  dispatch,
+}: {
+  recipeId: string;
+  item: PackagingCostRow;
+  dispatch: (action: PackagingAction) => void;
+}) {
   const [isPending, startTransition] = useTransition();
 
   const onRemove = () => {
@@ -490,6 +576,7 @@ function PackagingLine({ recipeId, item }: { recipeId: string; item: PackagingCo
     formData.set("id", item.id);
     formData.set("recipe_id", recipeId);
     startTransition(async () => {
+      dispatch({ type: "remove", id: item.id });
       await removePackagingCost(formData);
     });
   };
@@ -510,18 +597,30 @@ function PackagingLine({ recipeId, item }: { recipeId: string; item: PackagingCo
   );
 }
 
-function AddPackagingForm({ recipeId }: { recipeId: string }) {
+function AddPackagingForm({
+  recipeId,
+  dispatch,
+}: {
+  recipeId: string;
+  dispatch: (action: PackagingAction) => void;
+}) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const itemName = String(formData.get("item_name") ?? "").trim();
+    const costPerUnit = Number(formData.get("cost_per_unit"));
     setError(null);
     startTransition(async () => {
+      if (itemName && costPerUnit >= 0) {
+        dispatch({ type: "add", item: { id: tempId(), item_name: itemName, cost_per_unit: costPerUnit } });
+      }
       const result = await addPackagingCost(formData);
       if (result?.error) setError(result.error);
-      else (e.target as HTMLFormElement).reset();
+      else form.reset();
     });
   };
 
@@ -562,12 +661,14 @@ function SopStepLine({
   index,
   isFirst,
   isLast,
+  dispatch,
 }: {
   recipeId: string;
   step: SopStepRow;
   index: number;
   isFirst: boolean;
   isLast: boolean;
+  dispatch: (action: SopStepAction) => void;
 }) {
   const [text, setText] = useState(step.instruction);
   const [isPending, startTransition] = useTransition();
@@ -588,6 +689,7 @@ function SopStepLine({
     formData.set("id", step.id);
     formData.set("recipe_id", recipeId);
     startTransition(async () => {
+      dispatch({ type: "remove", id: step.id });
       await removeSopStep(formData);
     });
   };
@@ -642,18 +744,29 @@ function SopStepLine({
   );
 }
 
-function AddSopStepForm({ recipeId }: { recipeId: string }) {
+function AddSopStepForm({
+  recipeId,
+  dispatch,
+}: {
+  recipeId: string;
+  dispatch: (action: SopStepAction) => void;
+}) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const instruction = String(formData.get("instruction") ?? "").trim();
     setError(null);
     startTransition(async () => {
+      if (instruction) {
+        dispatch({ type: "add", item: { id: tempId(), step_order: 0, instruction } });
+      }
       const result = await addSopStep(formData);
       if (result?.error) setError(result.error);
-      else (e.target as HTMLFormElement).reset();
+      else form.reset();
     });
   };
 
@@ -681,9 +794,11 @@ function AddSopStepForm({ recipeId }: { recipeId: string }) {
 function InsertTemplateForm({
   recipeId,
   templates,
+  dispatch,
 }: {
   recipeId: string;
   templates: SopTemplateRow[];
+  dispatch: (action: SopStepAction) => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -691,11 +806,17 @@ function InsertTemplateForm({
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const templateId = String(formData.get("template_id") ?? "");
+    const template = templates.find((t) => t.id === templateId);
     setError(null);
     startTransition(async () => {
+      if (template) {
+        dispatch({ type: "add", item: { id: tempId(), step_order: 0, instruction: template.instruction } });
+      }
       const result = await addSopStepFromTemplate(formData);
       if (result?.error) setError(result.error);
-      else (e.target as HTMLFormElement).reset();
+      else form.reset();
     });
   };
 

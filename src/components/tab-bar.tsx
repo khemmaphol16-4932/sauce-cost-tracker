@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/stock", label: "Stock" },
-  { href: "/stock/low", label: "Low stock" },
   { href: "/recipes", label: "Recipes" },
   { href: "/batches", label: "Batches" },
   { href: "/export", label: "Export" },
@@ -16,22 +15,27 @@ export function TabBar() {
   const pathname = usePathname();
 
   return (
-    <nav className="mx-auto flex max-w-2xl gap-1 overflow-x-auto px-4 pb-2">
-      {TABS.map((tab) => {
-        const active =
-          tab.href === "/stock" ? pathname === "/stock" : pathname?.startsWith(tab.href);
-        return (
-          <Link
-            key={tab.href}
-            href={tab.href}
-            className={`shrink-0 rounded-lg px-3 py-2 text-center text-sm font-medium ${
-              active ? "bg-accent text-[#121212]" : "bg-surface text-text-secondary hover:bg-surface-hover"
-            }`}
-          >
-            {tab.label}
-          </Link>
-        );
-      })}
+    <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-bg/95 backdrop-blur">
+      <div
+        className="mx-auto grid max-w-2xl pb-[env(safe-area-inset-bottom)]"
+        style={{ gridTemplateColumns: `repeat(${TABS.length}, minmax(0, 1fr))` }}
+      >
+        {TABS.map((tab) => {
+          const active =
+            tab.href === "/stock" ? pathname === "/stock" : pathname?.startsWith(tab.href);
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={`flex flex-col items-center justify-center py-2.5 text-center text-[11px] font-medium transition-colors ${
+                active ? "text-accent" : "text-text-secondary"
+              }`}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }

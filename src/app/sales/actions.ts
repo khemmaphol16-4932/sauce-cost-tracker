@@ -35,6 +35,7 @@ export async function logSale(formData: FormData): Promise<ActionResult> {
   const paymentStatus = String(formData.get("payment_status") ?? "paid").trim() || "paid";
   const paymentMethod = String(formData.get("payment_method") ?? "").trim();
   const saleDateRaw = String(formData.get("sale_date") ?? "").trim();
+  const customerRef = String(formData.get("customer_ref") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
 
   const detail = await getRecipeDetail(recipeId);
@@ -60,6 +61,7 @@ export async function logSale(formData: FormData): Promise<ActionResult> {
     payment_method: paymentMethod || null,
     sale_date: saleDateRaw || undefined,
     cost_per_bottle_snapshot: cost.costPerBottle,
+    customer_ref: customerRef || null,
     notes: notes || null,
   });
   if (error) return { error: error.message };
@@ -76,6 +78,7 @@ export async function updateSale(formData: FormData): Promise<ActionResult> {
   const paymentStatus = String(formData.get("payment_status") ?? "paid").trim() || "paid";
   const paymentMethod = String(formData.get("payment_method") ?? "").trim();
   const saleDateRaw = String(formData.get("sale_date") ?? "").trim();
+  const customerRef = String(formData.get("customer_ref") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
 
   if (!saleDateRaw) return { error: "Date is required" };
@@ -89,6 +92,7 @@ export async function updateSale(formData: FormData): Promise<ActionResult> {
       payment_status: paymentStatus,
       payment_method: paymentMethod || null,
       sale_date: saleDateRaw,
+      customer_ref: customerRef || null,
       notes: notes || null,
     })
     .eq("id", id);

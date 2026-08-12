@@ -33,6 +33,7 @@ export function ExportButtons() {
         sopStepTemplatesCsv,
         salesCsv,
         finishedGoodsStockCsv,
+        expensesCsv,
       } = await getExportCsvs();
       const date = new Date().toISOString().slice(0, 10);
       if (ingredientsCsv) download(`ingredients-${date}.csv`, ingredientsCsv);
@@ -45,6 +46,7 @@ export function ExportButtons() {
       if (sopStepTemplatesCsv) download(`sop-step-templates-${date}.csv`, sopStepTemplatesCsv);
       if (salesCsv) download(`sales-${date}.csv`, salesCsv);
       if (finishedGoodsStockCsv) download(`finished-goods-stock-${date}.csv`, finishedGoodsStockCsv);
+      if (expensesCsv) download(`expenses-${date}.csv`, expensesCsv);
     });
   };
 
@@ -52,7 +54,7 @@ export function ExportButtons() {
     <div className="space-y-3 card">
       <p className="text-sm text-text-secondary">
         Download all of your business data as CSV files — a manual backup of ingredients,
-        purchases, recipes, batches, sales, and stock.
+        purchases, recipes, batches, sales, stock, and expenses.
       </p>
       <button
         onClick={exportAll}

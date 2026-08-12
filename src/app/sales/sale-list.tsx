@@ -55,6 +55,7 @@ export function SaleListRow({ sale }: { sale: SaleRow }) {
             <span className="font-mono">{sale.qty_bottles}</span> bottles ·{" "}
             <span className="font-mono">฿{sale.price_charged_total.toFixed(2)}</span> ·{" "}
             {sale.platform} · {sale.sale_date}
+            {sale.customer_ref && <> · {sale.customer_ref}</>}
           </p>
           {sale.notes && <p className="mt-1 text-sm text-text-secondary">{sale.notes}</p>}
         </button>
@@ -104,6 +105,16 @@ export function SaleListRow({ sale }: { sale: SaleRow }) {
               type="date"
               defaultValue={sale.sale_date}
               required
+              className="mt-1 w-full field-input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">
+              Customer / room
+            </label>
+            <input
+              name="customer_ref"
+              defaultValue={sale.customer_ref ?? ""}
               className="mt-1 w-full field-input"
             />
           </div>

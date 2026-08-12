@@ -19,7 +19,7 @@ export default function AppleIcon() {
           color: "#00e5ff",
         }}
       >
-        S
+        O
       </div>
     ),
     { ...size }

@@ -37,6 +37,7 @@ export async function getExportCsvs() {
     { data: sopStepTemplates },
     { data: sales },
     { data: finishedGoodsStock },
+    { data: expenses },
   ] = await Promise.all([
     supabase
       .from("ingredients")
@@ -92,6 +93,11 @@ export async function getExportCsvs() {
       .from("finished_goods_stock")
       .select("id, recipe_id, qty_on_hand, low_stock_threshold, created_at, recipes!inner(business_id)")
       .eq("recipes.business_id", businessId),
+    supabase
+      .from("expenses")
+      .select("id, category, description, amount, expense_date, created_at")
+      .eq("business_id", businessId)
+      .order("expense_date", { ascending: false }),
   ]);
 
   const stripJoinKey = (rows: Record<string, unknown>[] | null) =>
@@ -108,5 +114,6 @@ export async function getExportCsvs() {
     sopStepTemplatesCsv: toCsv(sopStepTemplates ?? []),
     salesCsv: toCsv(sales ?? []),
     finishedGoodsStockCsv: toCsv(stripJoinKey(finishedGoodsStock as Record<string, unknown>[] | null)),
+    expensesCsv: toCsv(expenses ?? []),
   };
 }

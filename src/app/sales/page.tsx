@@ -1,13 +1,20 @@
 import { getRecipes } from "@/lib/data/recipes";
-import { getSales } from "@/lib/data/sales";
+import { getSales, getQuickSellDefaults } from "@/lib/data/sales";
+import { QuickSell } from "./quick-sell";
 import { SaleForm } from "./sale-form";
 import { SaleListRow } from "./sale-list";
 
 export default async function SalesPage() {
-  const [recipes, sales] = await Promise.all([getRecipes(), getSales()]);
+  const [recipes, sales, quickSellDefaults] = await Promise.all([
+    getRecipes(),
+    getSales(),
+    getQuickSellDefaults(),
+  ]);
 
   return (
     <div className="space-y-4">
+      <QuickSell defaults={quickSellDefaults} />
+
       <SaleForm recipes={recipes.map((r) => ({ id: r.id, name: r.name }))} />
 
       <div>

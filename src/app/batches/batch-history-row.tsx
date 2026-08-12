@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { Modal } from "@/components/modal";
-import { updateBatch } from "./actions";
+import { ConfirmModal } from "@/components/confirm-modal";
+import { deleteBatch, updateBatch } from "./actions";
 import type { BatchHistoryRow as BatchHistoryRowType } from "@/lib/data/batches";
 
 export function BatchHistoryRow({ batch }: { batch: BatchHistoryRowType }) {
   const [open, setOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -18,6 +20,22 @@ export function BatchHistoryRow({ batch }: { batch: BatchHistoryRowType }) {
       const result = await updateBatch(formData);
       if (result?.error) setError(result.error);
       else setOpen(false);
+    });
+  };
+
+  const onDelete = () => {
+    const formData = new FormData();
+    formData.set("id", batch.id);
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteBatch(formData);
+      if (result?.error) {
+        setError(result.error);
+        setDeleteConfirmOpen(false);
+      } else {
+        setDeleteConfirmOpen(false);
+        setOpen(false);
+      }
     });
   };
 
@@ -77,11 +95,30 @@ export function BatchHistoryRow({ batch }: { batch: BatchHistoryRowType }) {
             />
           </div>
           {error && <p className="text-sm text-alert">{error}</p>}
-          <button type="submit" disabled={isPending} className="w-full btn-primary">
-            {isPending ? "Saving…" : "Save"}
-          </button>
+          <div className="flex gap-2">
+            <button type="submit" disabled={isPending} className="flex-1 btn-primary">
+              {isPending ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleteConfirmOpen(true)}
+              disabled={isPending}
+              className="rounded-xl border border-alert/40 px-4 py-3 text-base font-medium text-alert"
+            >
+              Delete
+            </button>
+          </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={onDelete}
+        title="Delete batch"
+        message={`Delete this batch of "${batch.recipe_name}"? Ingredients it used are restored to stock, and its bottles are removed from finished-goods stock. This cannot be undone.`}
+        isPending={isPending}
+      />
     </li>
   );
 }

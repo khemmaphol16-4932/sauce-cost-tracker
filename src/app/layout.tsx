@@ -13,10 +13,10 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sauce Cost & Stock Tracker",
+  title: "Ordexa",
   description: "Track ingredient stock, purchases, and recipe margins.",
   appleWebApp: {
-    title: "Sauce Tracker",
+    title: "Ordexa",
     statusBarStyle: "black-translucent",
     capable: true,
   },

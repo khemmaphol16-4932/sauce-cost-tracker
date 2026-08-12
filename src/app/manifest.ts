@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Sauce Cost & Stock Tracker",
-    short_name: "Sauce Tracker",
+    name: "Ordexa",
+    short_name: "Ordexa",
     description: "Track ingredient stock, purchases, and recipe margins.",
     start_url: "/",
     display: "standalone",

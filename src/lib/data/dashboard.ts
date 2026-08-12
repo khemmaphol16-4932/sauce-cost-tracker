@@ -4,26 +4,17 @@ import { getRecipes, getRecipeDetail } from "@/lib/data/recipes";
 import { calcRecipeCost, calcSaleMargin } from "@/lib/costing";
 
 export type MonthlySpend = { month: string; total: number };
+export type IngredientSpend = { name: string; total: number };
+export type CostTrendPoint = { date: string; cost: number };
 export type RecipeMargin = {
   id: string;
   name: string;
   marginPct: number;
   indicator: "red" | "yellow" | "green";
 };
-export type RecentPurchase = {
-  id: string;
-  ingredient_name: string;
-  qty_bought: number;
-  price_paid_total: number;
-  purchase_date: string;
-};
-export type RecentBatch = {
-  id: string;
-  recipe_name: string;
-  batch_date: string;
-  actual_yield_bottles: number | null;
-  cost_per_bottle_snapshot: number | null;
-};
+export type ActivityItem =
+  | { kind: "purchase"; id: string; date: string; title: string; detail: string; amount: string }
+  | { kind: "batch"; id: string; date: string; title: string; detail: string; amount: string };
 export type BestSeller = {
   recipe_id: string;
   recipe_name: string;
@@ -40,10 +31,12 @@ export type DashboardData = {
   lowStockCount: number;
   priceJumpCount: number;
   revenueTotal: number;
+  thisMonthSpend: number;
   monthlySpend: MonthlySpend[];
+  topIngredientsBySpend: IngredientSpend[];
+  costTrend: CostTrendPoint[];
   recipeMargins: RecipeMargin[];
-  recentPurchases: RecentPurchase[];
-  recentBatches: RecentBatch[];
+  recentActivity: ActivityItem[];
   bestSellers: BestSeller[];
   realMarginTrend: RealMarginMonth[];
 };
@@ -91,9 +84,13 @@ export async function getDashboardData(): Promise<DashboardData> {
   sixMonthsAgo.setDate(1);
   const sixMonthsAgoStr = sixMonthsAgo.toISOString().slice(0, 10);
 
-  const [{ data: purchases, error: purchasesError }, { data: recentPurchasesRaw, error: recentPurchasesError }] =
+  const [
+    { data: purchases, error: purchasesError },
+    { data: recentPurchasesRaw, error: recentPurchasesError },
+    { data: allPurchases, error: allPurchasesError },
+  ] =
     ingredientIds.length === 0
-      ? [{ data: [], error: null }, { data: [], error: null }]
+      ? [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }]
       : await Promise.all([
           supabase
             .from("purchases")
@@ -107,9 +104,26 @@ export async function getDashboardData(): Promise<DashboardData> {
             .order("purchase_date", { ascending: false })
             .order("created_at", { ascending: false })
             .limit(8),
+          supabase
+            .from("purchases")
+            .select("ingredient_id, price_paid_total")
+            .in("ingredient_id", ingredientIds),
         ]);
   if (purchasesError) throw new Error(purchasesError.message);
   if (recentPurchasesError) throw new Error(recentPurchasesError.message);
+  if (allPurchasesError) throw new Error(allPurchasesError.message);
+
+  const spendByIngredient = new Map<string, number>();
+  for (const p of allPurchases ?? []) {
+    spendByIngredient.set(
+      p.ingredient_id,
+      (spendByIngredient.get(p.ingredient_id) ?? 0) + p.price_paid_total
+    );
+  }
+  const topIngredientsBySpend: IngredientSpend[] = Array.from(spendByIngredient.entries())
+    .map(([id, total]) => ({ name: ingredientNameById.get(id) ?? "(deleted ingredient)", total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 6);
 
   // Price-jump count reuses the same 15% rule as the Stock page badge.
   const priceJumpCount = await getPriceJumpCount(supabase, ingredientIds);
@@ -127,12 +141,13 @@ export async function getDashboardData(): Promise<DashboardData> {
     monthlySpend.push({ month: label, total });
   }
 
-  const recentPurchases: RecentPurchase[] = (recentPurchasesRaw ?? []).map((p) => ({
+  const purchaseActivity: ActivityItem[] = (recentPurchasesRaw ?? []).map((p) => ({
+    kind: "purchase",
     id: p.id,
-    ingredient_name: ingredientNameById.get(p.ingredient_id) ?? "(deleted ingredient)",
-    qty_bought: p.qty_bought,
-    price_paid_total: p.price_paid_total,
-    purchase_date: p.purchase_date,
+    date: p.purchase_date,
+    title: ingredientNameById.get(p.ingredient_id) ?? "(deleted ingredient)",
+    detail: `Bought ${p.qty_bought}`,
+    amount: `฿${p.price_paid_total.toFixed(2)}`,
   }));
 
   const recipeSummaries = await getRecipes();
@@ -173,12 +188,33 @@ export async function getDashboardData(): Promise<DashboardData> {
     recipes: { name: string } | null;
   };
 
-  const recentBatches: RecentBatch[] = ((recentBatchesRaw ?? []) as unknown as RawBatch[]).map((b) => ({
+  const batchActivity: ActivityItem[] = ((recentBatchesRaw ?? []) as unknown as RawBatch[]).map((b) => ({
+    kind: "batch",
     id: b.id,
-    recipe_name: b.recipes?.name ?? "(deleted recipe)",
-    batch_date: b.batch_date,
-    actual_yield_bottles: b.actual_yield_bottles,
-    cost_per_bottle_snapshot: b.cost_per_bottle_snapshot,
+    date: b.batch_date,
+    title: b.recipes?.name ?? "(deleted recipe)",
+    detail: `${b.actual_yield_bottles ?? "?"} bottles`,
+    amount:
+      b.cost_per_bottle_snapshot != null ? `฿${b.cost_per_bottle_snapshot.toFixed(2)}/bottle` : "—",
+  }));
+
+  const recentActivity: ActivityItem[] = [...purchaseActivity, ...batchActivity]
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    .slice(0, 10);
+
+  const { data: costTrendRaw, error: costTrendError } = await supabase
+    .from("batches")
+    .select("batch_date, cost_per_bottle_snapshot, recipes!inner(business_id)")
+    .eq("recipes.business_id", businessId)
+    .not("cost_per_bottle_snapshot", "is", null)
+    .order("batch_date", { ascending: true })
+    .order("created_at", { ascending: true })
+    .limit(20);
+  if (costTrendError) throw new Error(costTrendError.message);
+
+  const costTrend: CostTrendPoint[] = (costTrendRaw ?? []).map((b) => ({
+    date: b.batch_date,
+    cost: b.cost_per_bottle_snapshot as number,
   }));
 
   const { data: salesRaw, error: salesError } = await supabase
@@ -271,10 +307,12 @@ export async function getDashboardData(): Promise<DashboardData> {
     lowStockCount,
     priceJumpCount,
     revenueTotal,
+    thisMonthSpend: monthlySpend[monthlySpend.length - 1]?.total ?? 0,
     monthlySpend,
+    topIngredientsBySpend,
+    costTrend,
     recipeMargins,
-    recentPurchases,
-    recentBatches,
+    recentActivity,
     bestSellers,
     realMarginTrend,
   };

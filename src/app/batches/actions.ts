@@ -109,3 +109,81 @@ export async function updateBatch(formData: FormData): Promise<ActionResult> {
   revalidatePath("/batches");
   revalidatePath("/stock");
 }
+
+export async function deleteBatch(formData: FormData): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const id = String(formData.get("id"));
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("batches")
+    .select("recipe_id, actual_yield_bottles")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchError) return { error: fetchError.message };
+  if (!existing) return { error: "Batch not found" };
+
+  const yielded = existing.actual_yield_bottles ?? 0;
+
+  // Block deletion if some of this batch's bottles were already sold — you
+  // can't un-produce stock that's no longer there.
+  const { data: stock, error: stockError } = await supabase
+    .from("finished_goods_stock")
+    .select("qty_on_hand")
+    .eq("recipe_id", existing.recipe_id)
+    .maybeSingle();
+  if (stockError) return { error: stockError.message };
+
+  const available = stock?.qty_on_hand ?? 0;
+  if (yielded > 0 && available < yielded) {
+    return {
+      error: `Can't delete this batch: ${(yielded - available).toFixed(0)} of its ${yielded} bottles have already been sold`,
+    };
+  }
+
+  // Restore the raw ingredients this batch used.
+  const { data: recipeIngredients, error: riError } = await supabase
+    .from("recipe_ingredients")
+    .select("ingredient_id, qty_used")
+    .eq("recipe_id", existing.recipe_id);
+  if (riError) return { error: riError.message };
+
+  const ingredientIds = (recipeIngredients ?? []).map((ri) => ri.ingredient_id);
+  if (ingredientIds.length > 0) {
+    const { data: ingredients, error: ingredientsError } = await supabase
+      .from("ingredients")
+      .select("id, qty_on_hand")
+      .in("id", ingredientIds);
+    if (ingredientsError) return { error: ingredientsError.message };
+
+    const qtyById = new Map((ingredients ?? []).map((i) => [i.id, i.qty_on_hand]));
+    for (const ri of recipeIngredients ?? []) {
+      const current = qtyById.get(ri.ingredient_id) ?? 0;
+      const { error: restoreError } = await supabase
+        .from("ingredients")
+        .update({ qty_on_hand: current + ri.qty_used })
+        .eq("id", ri.ingredient_id);
+      if (restoreError) return { error: restoreError.message };
+    }
+  }
+
+  // Reverse the finished-goods credit this batch made.
+  if (yielded > 0 && stock) {
+    const { error: adjustError } = await supabase
+      .from("finished_goods_stock")
+      .update({ qty_on_hand: available - yielded })
+      .eq("recipe_id", existing.recipe_id);
+    if (adjustError) return { error: adjustError.message };
+  }
+
+  const { error } = await supabase.from("batches").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/batches");
+  revalidatePath("/stock");
+  revalidatePath("/stock/low");
+}

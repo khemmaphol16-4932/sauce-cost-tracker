@@ -3,13 +3,22 @@
 import {
   Bar,
   BarChart,
+  CartesianGrid,
   Cell,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import type { MonthlySpend, RecipeMargin, RealMarginMonth } from "@/lib/data/dashboard";
+import type {
+  CostTrendPoint,
+  IngredientSpend,
+  MonthlySpend,
+  RecipeMargin,
+  RealMarginMonth,
+} from "@/lib/data/dashboard";
 
 const GRID_BORDER = "#2c2c2e";
 const TEXT_SECONDARY = "#98989d";
@@ -169,6 +178,99 @@ export function RecipeMarginChart({ data }: { data: RecipeMargin[] }) {
             ))}
           </Bar>
         </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export function TopIngredientsChart({ data }: { data: IngredientSpend[] }) {
+  if (data.length === 0) {
+    return (
+      <p className="flex h-48 items-center justify-center text-sm text-text-secondary">
+        No purchases logged yet.
+      </p>
+    );
+  }
+
+  return (
+    <div
+      className="w-full"
+      style={{ height: Math.max(160, data.length * 36) }}
+      role="img"
+      aria-label="Top ingredients by total spend"
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={data}
+          layout="vertical"
+          margin={{ top: 8, right: 24, left: 0, bottom: 0 }}
+        >
+          <XAxis
+            type="number"
+            tick={{ fill: TEXT_SECONDARY, fontSize: 11 }}
+            axisLine={{ stroke: GRID_BORDER }}
+            tickLine={false}
+            tickFormatter={(v: number) => `฿${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
+          />
+          <YAxis
+            type="category"
+            dataKey="name"
+            tick={{ fill: TEXT_SECONDARY, fontSize: 11 }}
+            axisLine={false}
+            tickLine={false}
+            width={100}
+          />
+          <Tooltip
+            cursor={{ fill: GRID_BORDER, opacity: 0.4 }}
+            content={<ChartTooltip formatValue={(v) => `฿${v.toFixed(2)} total`} />}
+          />
+          <Bar dataKey="total" fill={ACCENT} radius={[0, 4, 4, 0]} maxBarSize={20} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export function CostTrendChart({ data }: { data: CostTrendPoint[] }) {
+  if (data.length === 0) {
+    return (
+      <p className="flex h-48 items-center justify-center text-sm text-text-secondary">
+        Log a batch to start tracking cost per bottle over time.
+      </p>
+    );
+  }
+
+  return (
+    <div className="h-48 w-full" role="img" aria-label="Cost per bottle over time, across batches">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke={GRID_BORDER} vertical={false} />
+          <XAxis
+            dataKey="date"
+            tick={{ fill: TEXT_SECONDARY, fontSize: 11 }}
+            axisLine={{ stroke: GRID_BORDER }}
+            tickLine={false}
+          />
+          <YAxis
+            tick={{ fill: TEXT_SECONDARY, fontSize: 11 }}
+            axisLine={false}
+            tickLine={false}
+            width={40}
+            tickFormatter={(v: number) => `฿${v.toFixed(0)}`}
+          />
+          <Tooltip
+            cursor={{ stroke: GRID_BORDER }}
+            content={<ChartTooltip formatValue={(v) => `฿${v.toFixed(2)}/bottle`} />}
+          />
+          <Line
+            type="monotone"
+            dataKey="cost"
+            stroke={ACCENT}
+            strokeWidth={2}
+            dot={{ r: 4, fill: ACCENT, strokeWidth: 0 }}
+            activeDot={{ r: 5 }}
+          />
+        </LineChart>
       </ResponsiveContainer>
     </div>
   );

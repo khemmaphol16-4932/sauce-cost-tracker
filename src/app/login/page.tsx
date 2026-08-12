@@ -16,7 +16,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 px-6 text-center">
       <div>
-        <h1 className="text-2xl font-semibold">Sauce Cost & Stock Tracker</h1>
+        <h1 className="text-2xl font-semibold">Ordexa</h1>
         <p className="mt-2 text-sm text-text-secondary">
           Track ingredient stock, purchases, and recipe margins.
         </p>

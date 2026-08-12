@@ -71,19 +71,26 @@ export function LogBatchForm({ recipes }: { recipes: RecipeOption[] }) {
     <form onSubmit={submit} className="space-y-4 card">
       <div>
         <label className="block text-sm font-medium text-text-secondary">Recipe</label>
-        <select
-          name="recipe_id"
-          value={recipeId}
-          onChange={(e) => onSelectRecipe(e.target.value)}
-          required
-          className="mt-1 w-full field-input"
-        >
+        <input type="hidden" name="recipe_id" value={recipeId} required />
+        <div className="mt-1 grid grid-cols-2 gap-2">
           {recipes.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => onSelectRecipe(r.id)}
+              className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                r.id === recipeId
+                  ? "border-accent bg-accent/10"
+                  : "border-border bg-bg active:bg-surface-hover"
+              }`}
+            >
+              <p className="truncate text-sm font-medium text-text">{r.name}</p>
+              <p className="mt-0.5 font-mono text-xs text-text-secondary">
+                ~{r.estimatedBottles} bottles
+              </p>
+            </button>
           ))}
-        </select>
+        </div>
       </div>
       {sopSteps.length > 0 && (
         <div>

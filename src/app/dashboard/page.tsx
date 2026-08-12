@@ -1,39 +1,85 @@
 import Link from "next/link";
 import { getDashboardData } from "@/lib/data/dashboard";
-import { MonthlySpendChart, RecipeMarginChart, RealMarginChart } from "./charts";
+import { ChartTabs } from "./chart-tabs";
 
 export default async function DashboardPage() {
   const data = await getDashboardData();
+  const needsAttention = data.lowStockCount > 0 || data.priceJumpCount > 0;
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-2">
-        <StatCard label="Revenue" value={`฿${data.revenueTotal.toFixed(0)}`} href="/sales" />
-        <StatCard label="Ingredients" value={data.ingredientCount} />
-        <StatCard label="Recipes" value={data.recipeCount} />
-        <StatCard label="Batches" value={data.batchCount} />
-        <StatCard label="Stock value" value={`฿${data.totalStockValue.toFixed(0)}`} />
-        <StatCard
-          label="Low stock"
-          value={data.lowStockCount}
-          href="/stock/low"
-          tone={data.lowStockCount > 0 ? "alert" : undefined}
-        />
-        <StatCard
-          label="Price jumps"
-          value={data.priceJumpCount}
-          href="/stock"
-          tone={data.priceJumpCount > 0 ? "alert" : undefined}
-        />
+      {needsAttention && (
+        <div className="rounded-2xl border border-alert/40 bg-alert-bg p-4">
+          <h2 className="mb-2 text-sm font-semibold text-alert">Needs attention</h2>
+          <ul className="space-y-1.5">
+            {data.lowStockCount > 0 && (
+              <li>
+                <Link
+                  href="/stock/low"
+                  className="flex items-center justify-between text-sm text-text hover:underline"
+                >
+                  <span>
+                    <span className="font-mono font-semibold">{data.lowStockCount}</span> item
+                    {data.lowStockCount === 1 ? "" : "s"} low on stock
+                  </span>
+                  <span className="text-alert">→</span>
+                </Link>
+              </li>
+            )}
+            {data.priceJumpCount > 0 && (
+              <li>
+                <Link
+                  href="/stock"
+                  className="flex items-center justify-between text-sm text-text hover:underline"
+                >
+                  <span>
+                    <span className="font-mono font-semibold">{data.priceJumpCount}</span> price
+                    jump{data.priceJumpCount === 1 ? "" : "s"} detected
+                  </span>
+                  <span className="text-alert">→</span>
+                </Link>
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {/* Hero KPIs */}
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/sales" className="card">
+          <p className="text-xs text-text-secondary">Revenue</p>
+          <p className="mt-1 font-mono text-3xl font-bold text-success">
+            ฿{data.revenueTotal.toFixed(0)}
+          </p>
+        </Link>
+        <div className="card">
+          <p className="text-xs text-text-secondary">This month&apos;s spend</p>
+          <p className="mt-1 font-mono text-3xl font-bold text-accent">
+            ฿{data.thisMonthSpend.toFixed(0)}
+          </p>
+        </div>
       </div>
 
-      <div className="card">
-        <h2 className="mb-1 text-sm font-semibold text-text">Real margin / month</h2>
-        <p className="mb-2 text-xs text-text-secondary">
-          From actual sales, last 6 months, this business
-        </p>
-        <RealMarginChart data={data.realMarginTrend} />
+      {/* Compact overview strip */}
+      <div className="card flex items-center justify-around !py-3 text-center">
+        <OverviewStat label="Ingredients" value={data.ingredientCount} />
+        <div className="h-8 w-px bg-border" />
+        <OverviewStat label="Recipes" value={data.recipeCount} />
+        <div className="h-8 w-px bg-border" />
+        <OverviewStat label="Batches" value={data.batchCount} />
+        <div className="h-8 w-px bg-border" />
+        <Link href="/stock">
+          <OverviewStat label="Stock value" value={`฿${data.totalStockValue.toFixed(0)}`} />
+        </Link>
       </div>
+
+      <ChartTabs
+        realMarginTrend={data.realMarginTrend}
+        monthlySpend={data.monthlySpend}
+        topIngredientsBySpend={data.topIngredientsBySpend}
+        recipeMargins={data.recipeMargins}
+        costTrend={data.costTrend}
+      />
 
       <div className="card">
         <div className="mb-2 flex items-center justify-between">
@@ -62,67 +108,41 @@ export default async function DashboardPage() {
       </div>
 
       <div className="card">
-        <h2 className="mb-1 text-sm font-semibold text-text">Ingredient spend / month</h2>
-        <p className="mb-2 text-xs text-text-secondary">Last 6 months, this business</p>
-        <MonthlySpendChart data={data.monthlySpend} />
-      </div>
-
-      <div className="card">
-        <h2 className="mb-1 text-sm font-semibold text-text">Margin by recipe</h2>
-        <p className="mb-2 text-xs text-text-secondary">
-          Recipes with a target sell price set
-        </p>
-        <RecipeMarginChart data={data.recipeMargins} />
-      </div>
-
-      <div className="card">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text">Recent purchases</h2>
-          <Link href="/stock" className="text-xs text-accent underline underline-offset-2">
-            View all
-          </Link>
+          <h2 className="text-sm font-semibold text-text">Recent activity</h2>
+          <div className="flex gap-3 text-xs">
+            <Link href="/stock" className="text-accent underline underline-offset-2">
+              Stock
+            </Link>
+            <Link href="/batches" className="text-accent underline underline-offset-2">
+              Batches
+            </Link>
+          </div>
         </div>
-        {data.recentPurchases.length === 0 ? (
-          <p className="py-2 text-sm text-text-secondary">No purchases logged yet.</p>
+        {data.recentActivity.length === 0 ? (
+          <p className="py-2 text-sm text-text-secondary">
+            No purchases or batches logged yet.
+          </p>
         ) : (
           <ul className="divide-y divide-border">
-            {data.recentPurchases.map((p) => (
-              <li key={p.id} className="flex items-center justify-between py-2 text-sm">
-                <div className="min-w-0">
-                  <p className="truncate text-text">{p.ingredient_name}</p>
+            {data.recentActivity.map((item) => (
+              <li key={`${item.kind}-${item.id}`} className="flex items-center gap-3 py-2 text-sm">
+                <span
+                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                    item.kind === "purchase"
+                      ? "bg-accent/15 text-accent"
+                      : "bg-success/15 text-success"
+                  }`}
+                >
+                  {item.kind === "purchase" ? "Buy" : "Batch"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-text">{item.title}</p>
                   <p className="text-xs text-text-secondary">
-                    {p.purchase_date} · <span className="font-mono">{p.qty_bought}</span>
+                    {item.date} · {item.detail}
                   </p>
                 </div>
-                <span className="shrink-0 font-mono text-text">
-                  ฿{p.price_paid_total.toFixed(2)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="card">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text">Recent batches</h2>
-          <Link href="/batches" className="text-xs text-accent underline underline-offset-2">
-            View all
-          </Link>
-        </div>
-        {data.recentBatches.length === 0 ? (
-          <p className="py-2 text-sm text-text-secondary">No batches logged yet.</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {data.recentBatches.map((b) => (
-              <li key={b.id} className="flex items-center justify-between py-2 text-sm">
-                <div className="min-w-0">
-                  <p className="truncate text-text">{b.recipe_name}</p>
-                  <p className="text-xs text-text-secondary">{b.batch_date}</p>
-                </div>
-                <span className="shrink-0 font-mono text-text-secondary">
-                  {b.actual_yield_bottles ?? "?"} bottles
-                </span>
+                <span className="shrink-0 font-mono text-text">{item.amount}</span>
               </li>
             ))}
           </ul>
@@ -132,26 +152,11 @@ export default async function DashboardPage() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  href,
-  tone,
-}: {
-  label: string;
-  value: string | number;
-  href?: string;
-  tone?: "alert";
-}) {
-  const content = (
-    <div className="card !p-3">
-      <p className="truncate text-[11px] text-text-secondary">{label}</p>
-      <p
-        className={`font-mono text-lg font-bold ${tone === "alert" ? "text-alert" : "text-text"}`}
-      >
-        {value}
-      </p>
+function OverviewStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div>
+      <p className="font-mono text-xl font-bold text-text">{value}</p>
+      <p className="text-[11px] text-text-secondary">{label}</p>
     </div>
   );
-  return href ? <Link href={href}>{content}</Link> : content;
 }

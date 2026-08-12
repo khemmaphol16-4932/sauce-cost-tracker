@@ -152,6 +152,16 @@ export function SaleForm({ recipes }: { recipes: { id: string; name: string }[] 
         />
       </div>
       <div>
+        <label className="block text-sm font-medium text-text-secondary">
+          Customer / room (optional)
+        </label>
+        <input
+          name="customer_ref"
+          placeholder="e.g. room number, name — powers repeat-customer stats"
+          className="mt-1 w-full field-input"
+        />
+      </div>
+      <div>
         <label className="block text-sm font-medium text-text-secondary">Notes (optional)</label>
         <textarea name="notes" rows={2} className="mt-1 w-full field-input" />
       </div>

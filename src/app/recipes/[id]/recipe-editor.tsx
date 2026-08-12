@@ -66,6 +66,9 @@ export function RecipeEditor({
   const [isPending, startTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [openSection, setOpenSection] = useState<
+    "fields" | "ingredients" | "packaging" | "sop" | "templates" | null
+  >("fields");
 
   const [optimisticIngredients, dispatchIngredients] = useOptimistic(
     ingredients,
@@ -168,8 +171,11 @@ export function RecipeEditor({
         </p>
       </div>
 
-      {/* Recipe fields */}
-      <div className="space-y-4 card">
+      <AccordionSection
+        title="Recipe fields"
+        isOpen={openSection === "fields"}
+        onToggle={() => setOpenSection((s) => (s === "fields" ? null : "fields"))}
+      >
         <Field label="Recipe name">
           <input
             value={draft.name}
@@ -277,7 +283,7 @@ export function RecipeEditor({
             Delete
           </button>
         </div>
-      </div>
+      </AccordionSection>
 
       <ConfirmModal
         open={deleteConfirmOpen}
@@ -291,10 +297,12 @@ export function RecipeEditor({
         isPending={isPending}
       />
 
-      {/* Ingredients */}
-      <div className="card">
-        <h2 className="mb-2 text-sm font-semibold text-text">Ingredients</h2>
-        <ul className="mb-3 divide-y divide-border">
+      <AccordionSection
+        title="Ingredients"
+        isOpen={openSection === "ingredients"}
+        onToggle={() => setOpenSection((s) => (s === "ingredients" ? null : "ingredients"))}
+      >
+        <ul className="divide-y divide-border">
           {optimisticIngredients.map((ri) => (
             <IngredientLine key={ri.id} recipeId={recipe.id} ri={ri} dispatch={dispatchIngredients} />
           ))}
@@ -303,12 +311,14 @@ export function RecipeEditor({
           )}
         </ul>
         <AddIngredientForm recipeId={recipe.id} options={ingredientOptions} dispatch={dispatchIngredients} />
-      </div>
+      </AccordionSection>
 
-      {/* Packaging */}
-      <div className="card">
-        <h2 className="mb-2 text-sm font-semibold text-text">Packaging costs</h2>
-        <ul className="mb-3 divide-y divide-border">
+      <AccordionSection
+        title="Packaging costs"
+        isOpen={openSection === "packaging"}
+        onToggle={() => setOpenSection((s) => (s === "packaging" ? null : "packaging"))}
+      >
+        <ul className="divide-y divide-border">
           {optimisticPackaging.map((p) => (
             <PackagingLine key={p.id} recipeId={recipe.id} item={p} dispatch={dispatchPackaging} />
           ))}
@@ -317,12 +327,14 @@ export function RecipeEditor({
           )}
         </ul>
         <AddPackagingForm recipeId={recipe.id} dispatch={dispatchPackaging} />
-      </div>
+      </AccordionSection>
 
-      {/* SOP */}
-      <div className="card">
-        <h2 className="mb-2 text-sm font-semibold text-text">Production SOP</h2>
-        <ol className="mb-3 divide-y divide-border">
+      <AccordionSection
+        title="Production SOP"
+        isOpen={openSection === "sop"}
+        onToggle={() => setOpenSection((s) => (s === "sop" ? null : "sop"))}
+      >
+        <ol className="divide-y divide-border">
           {optimisticSopSteps.map((step, i) => (
             <SopStepLine
               key={step.id}
@@ -342,15 +354,15 @@ export function RecipeEditor({
           <InsertTemplateForm recipeId={recipe.id} templates={sopTemplates} dispatch={dispatchSopSteps} />
         )}
         <AddSopStepForm recipeId={recipe.id} dispatch={dispatchSopSteps} />
-      </div>
+      </AccordionSection>
 
-      {/* SOP step templates */}
-      <div className="card">
-        <h2 className="mb-1 text-sm font-semibold text-text">SOP step templates</h2>
-        <p className="mb-2 text-xs text-text-secondary">
-          Save common steps once, insert them into any recipe above.
-        </p>
-        <ul className="mb-3 divide-y divide-border">
+      <AccordionSection
+        title="SOP step templates"
+        subtitle="Save common steps once, insert them into any recipe above."
+        isOpen={openSection === "templates"}
+        onToggle={() => setOpenSection((s) => (s === "templates" ? null : "templates"))}
+      >
+        <ul className="divide-y divide-border">
           {sopTemplates.map((t) => (
             <SopTemplateLine key={t.id} recipeId={recipe.id} template={t} />
           ))}
@@ -359,7 +371,43 @@ export function RecipeEditor({
           )}
         </ul>
         <AddSopTemplateForm recipeId={recipe.id} />
-      </div>
+      </AccordionSection>
+    </div>
+  );
+}
+
+function AccordionSection({
+  title,
+  subtitle,
+  isOpen,
+  onToggle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="card">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-text">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-text-secondary">{subtitle}</p>}
+        </div>
+        <span
+          className={`shrink-0 text-text-secondary transition-transform ${isOpen ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        >
+          ▾
+        </span>
+      </button>
+      {isOpen && <div className="mt-3 space-y-4">{children}</div>}
     </div>
   );
 }

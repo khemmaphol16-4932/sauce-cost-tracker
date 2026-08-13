@@ -9,10 +9,12 @@ const TABS = [
   { href: "/recipes", label: "Recipes" },
   { href: "/batches", label: "Batches" },
   { href: "/sales", label: "Sales" },
-  { href: "/financials", label: "Financials" },
-  { href: "/analytics", label: "Analytics" },
-  { href: "/export", label: "Export" },
+  { href: "/more", label: "More" },
 ] as const;
+
+// Routes reachable from the "More" page — the tab should still highlight
+// when viewing any of them, not just /more itself.
+const MORE_ROUTES = ["/more", "/financials", "/analytics", "/export"];
 
 export function TabBar() {
   const pathname = usePathname();
@@ -25,7 +27,11 @@ export function TabBar() {
       >
         {TABS.map((tab) => {
           const active =
-            tab.href === "/stock" ? pathname === "/stock" : pathname?.startsWith(tab.href);
+            tab.href === "/stock"
+              ? pathname === "/stock"
+              : tab.href === "/more"
+                ? MORE_ROUTES.some((r) => pathname?.startsWith(r))
+                : pathname?.startsWith(tab.href);
           return (
             <Link
               key={tab.href}

@@ -32,15 +32,30 @@ export async function logBatch(formData: FormData): Promise<ActionResult> {
   const batchDateRaw = String(formData.get("batch_date") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
 
-  const { error } = await supabase.from("batches").insert({
-    user_id: user.id,
-    recipe_id: recipeId,
-    batch_date: batchDateRaw || undefined,
-    actual_yield_bottles: actualYieldBottles,
-    notes: notes || null,
-    cost_per_bottle_snapshot: cost.costPerBottle,
-  });
+  const { data: batch, error } = await supabase
+    .from("batches")
+    .insert({
+      user_id: user.id,
+      recipe_id: recipeId,
+      batch_date: batchDateRaw || undefined,
+      actual_yield_bottles: actualYieldBottles,
+      notes: notes || null,
+      cost_per_bottle_snapshot: cost.costPerBottle,
+    })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
+
+  if (detail.ingredients.length > 0) {
+    const { error: usageError } = await supabase.from("batch_ingredient_usage").insert(
+      detail.ingredients.map((i) => ({
+        batch_id: batch.id,
+        ingredient_id: i.ingredient_id,
+        qty_used: i.qty_used,
+      }))
+    );
+    if (usageError) return { error: usageError.message };
+  }
 
   revalidatePath("/batches");
   revalidatePath("/stock");
@@ -85,25 +100,11 @@ export async function updateBatch(formData: FormData): Promise<ActionResult> {
   const oldYield = existing.actual_yield_bottles ?? 0;
   const delta = newYield - oldYield;
   if (delta !== 0) {
-    const { data: stock, error: stockError } = await supabase
-      .from("finished_goods_stock")
-      .select("qty_on_hand")
-      .eq("recipe_id", existing.recipe_id)
-      .maybeSingle();
-    if (stockError) return { error: stockError.message };
-
-    if (stock) {
-      const { error: adjustError } = await supabase
-        .from("finished_goods_stock")
-        .update({ qty_on_hand: stock.qty_on_hand + delta })
-        .eq("recipe_id", existing.recipe_id);
-      if (adjustError) return { error: adjustError.message };
-    } else {
-      const { error: insertError } = await supabase
-        .from("finished_goods_stock")
-        .insert({ user_id: user.id, recipe_id: existing.recipe_id, qty_on_hand: Math.max(0, delta) });
-      if (insertError) return { error: insertError.message };
-    }
+    const { error: adjustError } = await supabase.rpc("adjust_finished_goods_stock", {
+      p_recipe_id: existing.recipe_id,
+      p_delta: delta,
+    });
+    if (adjustError) return { error: adjustError.message };
   }
 
   revalidatePath("/batches");
@@ -145,14 +146,16 @@ export async function deleteBatch(formData: FormData): Promise<ActionResult> {
     };
   }
 
-  // Restore the raw ingredients this batch used.
-  const { data: recipeIngredients, error: riError } = await supabase
-    .from("recipe_ingredients")
+  // Restore the raw ingredients this batch used, from the snapshot taken
+  // when the batch was logged — NOT today's recipe_ingredients, which may
+  // have been edited since (that would restore the wrong amounts).
+  const { data: usage, error: usageError } = await supabase
+    .from("batch_ingredient_usage")
     .select("ingredient_id, qty_used")
-    .eq("recipe_id", existing.recipe_id);
-  if (riError) return { error: riError.message };
+    .eq("batch_id", id);
+  if (usageError) return { error: usageError.message };
 
-  const ingredientIds = (recipeIngredients ?? []).map((ri) => ri.ingredient_id);
+  const ingredientIds = (usage ?? []).map((u) => u.ingredient_id);
   if (ingredientIds.length > 0) {
     const { data: ingredients, error: ingredientsError } = await supabase
       .from("ingredients")
@@ -161,22 +164,22 @@ export async function deleteBatch(formData: FormData): Promise<ActionResult> {
     if (ingredientsError) return { error: ingredientsError.message };
 
     const qtyById = new Map((ingredients ?? []).map((i) => [i.id, i.qty_on_hand]));
-    for (const ri of recipeIngredients ?? []) {
-      const current = qtyById.get(ri.ingredient_id) ?? 0;
+    for (const u of usage ?? []) {
+      const current = qtyById.get(u.ingredient_id) ?? 0;
       const { error: restoreError } = await supabase
         .from("ingredients")
-        .update({ qty_on_hand: current + ri.qty_used })
-        .eq("id", ri.ingredient_id);
+        .update({ qty_on_hand: current + u.qty_used })
+        .eq("id", u.ingredient_id);
       if (restoreError) return { error: restoreError.message };
     }
   }
 
   // Reverse the finished-goods credit this batch made.
   if (yielded > 0 && stock) {
-    const { error: adjustError } = await supabase
-      .from("finished_goods_stock")
-      .update({ qty_on_hand: available - yielded })
-      .eq("recipe_id", existing.recipe_id);
+    const { error: adjustError } = await supabase.rpc("adjust_finished_goods_stock", {
+      p_recipe_id: existing.recipe_id,
+      p_delta: -yielded,
+    });
     if (adjustError) return { error: adjustError.message };
   }
 

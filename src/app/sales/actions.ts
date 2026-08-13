@@ -117,20 +117,11 @@ export async function deleteSale(formData: FormData): Promise<ActionResult> {
   const { error: deleteError } = await supabase.from("sales").delete().eq("id", id);
   if (deleteError) return { error: deleteError.message };
 
-  const { data: stock, error: stockError } = await supabase
-    .from("finished_goods_stock")
-    .select("qty_on_hand")
-    .eq("recipe_id", sale.recipe_id)
-    .maybeSingle();
-  if (stockError) return { error: stockError.message };
-
-  if (stock) {
-    const { error: creditError } = await supabase
-      .from("finished_goods_stock")
-      .update({ qty_on_hand: stock.qty_on_hand + sale.qty_bottles })
-      .eq("recipe_id", sale.recipe_id);
-    if (creditError) return { error: creditError.message };
-  }
+  const { error: creditError } = await supabase.rpc("adjust_finished_goods_stock", {
+    p_recipe_id: sale.recipe_id,
+    p_delta: sale.qty_bottles,
+  });
+  if (creditError) return { error: creditError.message };
 
   revalidatePath("/sales");
   revalidatePath("/stock");
@@ -171,7 +162,7 @@ export async function updateFinishedGoodsThreshold(formData: FormData): Promise<
 }
 
 export async function adjustFinishedGoods(formData: FormData): Promise<ActionResult> {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
 
   const recipeId = String(formData.get("recipe_id"));
   const delta = Number(formData.get("delta"));
@@ -181,27 +172,11 @@ export async function adjustFinishedGoods(formData: FormData): Promise<ActionRes
   }
   if (!reason) return { error: "A reason is required (e.g. breakage, sample, miscounted)" };
 
-  const { data: stock, error: fetchError } = await supabase
-    .from("finished_goods_stock")
-    .select("qty_on_hand")
-    .eq("recipe_id", recipeId)
-    .maybeSingle();
-  if (fetchError) return { error: fetchError.message };
-
-  const newQty = Math.max(0, (stock?.qty_on_hand ?? 0) + delta);
-
-  if (stock) {
-    const { error } = await supabase
-      .from("finished_goods_stock")
-      .update({ qty_on_hand: newQty })
-      .eq("recipe_id", recipeId);
-    if (error) return { error: error.message };
-  } else {
-    const { error } = await supabase
-      .from("finished_goods_stock")
-      .insert({ user_id: user.id, recipe_id: recipeId, qty_on_hand: newQty });
-    if (error) return { error: error.message };
-  }
+  const { error } = await supabase.rpc("adjust_finished_goods_stock", {
+    p_recipe_id: recipeId,
+    p_delta: delta,
+  });
+  if (error) return { error: error.message };
 
   revalidatePath("/stock");
   revalidatePath("/sales");

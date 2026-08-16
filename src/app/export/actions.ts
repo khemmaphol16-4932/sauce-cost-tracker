@@ -47,7 +47,7 @@ export async function getExportCsvs() {
     supabase
       .from("purchases")
       .select(
-        "id, ingredient_id, qty_bought, price_paid_total, purchase_date, created_at, ingredients!inner(business_id)"
+        "id, ingredient_id, qty_bought, price_paid_total, purchase_date, brand, created_at, ingredients!inner(business_id)"
       )
       .eq("ingredients.business_id", businessId)
       .order("purchase_date", { ascending: false }),

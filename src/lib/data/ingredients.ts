@@ -95,3 +95,25 @@ export async function getIngredientOptions(): Promise<IngredientOption[]> {
   if (error) throw new Error(error.message);
   return data ?? [];
 }
+
+// Picklist source for the "brand" field on a purchase — grouped by
+// ingredient so the Stock page can hand each IngredientRow just its own list.
+export async function getIngredientBrandsByIngredient(): Promise<Map<string, string[]>> {
+  const supabase = await createClient();
+  const businessId = await getCurrentBusinessId();
+
+  const { data, error } = await supabase
+    .from("ingredient_brands")
+    .select("ingredient_id, name, ingredients!inner(business_id)")
+    .eq("ingredients.business_id", businessId)
+    .order("name", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const byIngredient = new Map<string, string[]>();
+  for (const row of data ?? []) {
+    const list = byIngredient.get(row.ingredient_id) ?? [];
+    list.push(row.name);
+    byIngredient.set(row.ingredient_id, list);
+  }
+  return byIngredient;
+}

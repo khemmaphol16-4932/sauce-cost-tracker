@@ -7,11 +7,19 @@ import { deleteIngredient, logPurchase, updateIngredient } from "./actions";
 import type { IngredientWithLastPurchase } from "@/lib/data/ingredients";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const NEW_BRAND_VALUE = "__new__";
 
-export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPurchase }) {
+export function IngredientRow({
+  ingredient,
+  brands = [],
+}: {
+  ingredient: IngredientWithLastPurchase;
+  brands?: string[];
+}) {
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [brandChoice, setBrandChoice] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +34,10 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
     startTransition(async () => {
       const result = await logPurchase(formData);
       if (result?.error) setError(result.error);
-      else setPurchaseOpen(false);
+      else {
+        setPurchaseOpen(false);
+        setBrandChoice("");
+      }
     });
   };
 
@@ -85,7 +96,14 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
         + Purchase
       </button>
 
-      <Modal open={purchaseOpen} onClose={() => setPurchaseOpen(false)} title={`Log purchase — ${ingredient.name}`}>
+      <Modal
+        open={purchaseOpen}
+        onClose={() => {
+          setPurchaseOpen(false);
+          setBrandChoice("");
+        }}
+        title={`Log purchase — ${ingredient.name}`}
+      >
         <form onSubmit={submitPurchase} className="space-y-4">
           <input type="hidden" name="ingredient_id" value={ingredient.id} />
           <div>
@@ -102,6 +120,34 @@ export function IngredientRow({ ingredient }: { ingredient: IngredientWithLastPu
               autoFocus
               className="mt-1 w-full field-input"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">
+              Brand (optional)
+            </label>
+            <select
+              name="brand"
+              value={brandChoice}
+              onChange={(e) => setBrandChoice(e.target.value)}
+              className="mt-1 w-full field-input"
+            >
+              <option value="">No brand</option>
+              {brands.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+              <option value={NEW_BRAND_VALUE}>+ Add new brand…</option>
+            </select>
+            {brandChoice === NEW_BRAND_VALUE && (
+              <input
+                name="new_brand"
+                placeholder="e.g. CP, Aro…"
+                required
+                autoFocus
+                className="mt-2 w-full field-input"
+              />
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-text-secondary">Total price paid (฿)</label>

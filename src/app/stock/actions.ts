@@ -91,6 +91,8 @@ export async function deleteIngredient(formData: FormData): Promise<ActionResult
   revalidatePath("/stock/low");
 }
 
+const NEW_BRAND_VALUE = "__new__";
+
 export async function logPurchase(formData: FormData): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
 
@@ -98,9 +100,36 @@ export async function logPurchase(formData: FormData): Promise<ActionResult> {
   const qtyBought = Number(formData.get("qty_bought"));
   const pricePaidTotal = Number(formData.get("price_paid_total"));
   const purchaseDateRaw = String(formData.get("purchase_date") ?? "").trim();
+  const brandSelect = String(formData.get("brand") ?? "").trim();
+  const newBrand = String(formData.get("new_brand") ?? "").trim();
 
   if (!ingredientId || !(qtyBought > 0) || !(pricePaidTotal >= 0)) {
     return { error: "Valid ingredient, quantity, and price are required" };
+  }
+
+  let brand: string | null = null;
+  if (brandSelect === NEW_BRAND_VALUE) {
+    if (!newBrand) return { error: "Enter a name for the new brand" };
+    brand = newBrand;
+
+    const { data: existingBrand, error: existingBrandError } = await supabase
+      .from("ingredient_brands")
+      .select("name")
+      .eq("ingredient_id", ingredientId)
+      .ilike("name", newBrand)
+      .maybeSingle();
+    if (existingBrandError) return { error: existingBrandError.message };
+
+    if (existingBrand) {
+      brand = existingBrand.name;
+    } else {
+      const { error: brandError } = await supabase
+        .from("ingredient_brands")
+        .insert({ user_id: user.id, ingredient_id: ingredientId, name: newBrand });
+      if (brandError) return { error: brandError.message };
+    }
+  } else if (brandSelect) {
+    brand = brandSelect;
   }
 
   const { error } = await supabase.from("purchases").insert({
@@ -109,11 +138,13 @@ export async function logPurchase(formData: FormData): Promise<ActionResult> {
     qty_bought: qtyBought,
     price_paid_total: pricePaidTotal,
     purchase_date: purchaseDateRaw || undefined,
+    brand,
   });
   if (error) return { error: error.message };
 
   revalidatePath("/stock");
   revalidatePath("/stock/low");
+  revalidatePath("/financials/purchases");
 }
 
 export async function signOut() {

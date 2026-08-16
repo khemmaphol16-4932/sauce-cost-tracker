@@ -1,14 +1,15 @@
 import Link from "next/link";
-import { getIngredientsWithLastPurchase } from "@/lib/data/ingredients";
+import { getIngredientsWithLastPurchase, getIngredientBrandsByIngredient } from "@/lib/data/ingredients";
 import { getFinishedGoodsStock } from "@/lib/data/finished-goods";
 import { IngredientRow } from "./ingredient-row";
 import { AddIngredientButton } from "./add-ingredient-button";
 import { FinishedGoodsRow } from "./finished-goods-row";
 
 export default async function StockPage() {
-  const [ingredients, finishedGoods] = await Promise.all([
+  const [ingredients, finishedGoods, brandsByIngredient] = await Promise.all([
     getIngredientsWithLastPurchase(),
     getFinishedGoodsStock(),
+    getIngredientBrandsByIngredient(),
   ]);
   const lowIngredientCount = ingredients.filter(
     (i) => i.low_stock_threshold != null && i.qty_on_hand < i.low_stock_threshold
@@ -52,7 +53,11 @@ export default async function StockPage() {
       ) : (
         <ul className="rounded-2xl border border-border bg-surface px-4 shadow-sm">
           {ingredients.map((ingredient) => (
-            <IngredientRow key={ingredient.id} ingredient={ingredient} />
+            <IngredientRow
+              key={ingredient.id}
+              ingredient={ingredient}
+              brands={brandsByIngredient.get(ingredient.id) ?? []}
+            />
           ))}
         </ul>
       )}

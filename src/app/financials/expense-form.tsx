@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { logExpense } from "./actions";
-import { EXPENSE_CATEGORIES } from "@/lib/data/expenses";
+import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 

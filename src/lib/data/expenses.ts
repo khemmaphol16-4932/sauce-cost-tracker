@@ -22,13 +22,3 @@ export async function getExpenses(): Promise<ExpenseRow[]> {
   if (error) throw new Error(error.message);
   return data ?? [];
 }
-
-export const EXPENSE_CATEGORIES = [
-  "rent",
-  "utilities",
-  "labor",
-  "packaging",
-  "equipment",
-  "marketing",
-  "other",
-] as const;

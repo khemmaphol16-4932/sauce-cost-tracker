@@ -48,7 +48,7 @@ export function FinancialsChart({ data }: { data: FinancialsMonth[] }) {
               borderRadius: 8,
               fontSize: 12,
             }}
-            formatter={(value: number) => fmtBaht(value)}
+            formatter={(value) => fmtBaht(Number(value))}
           />
           <Legend wrapperStyle={{ fontSize: 11, color: TEXT_SECONDARY }} />
           <Bar dataKey="revenue" name="Revenue" fill={SUCCESS} radius={[4, 4, 0, 0]} maxBarSize={16} />

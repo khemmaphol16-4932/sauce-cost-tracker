@@ -16,6 +16,7 @@ const PLATFORM_OPTIONS = [
 export function SaleForm({ recipes }: { recipes: { id: string; name: string }[] }) {
   const [platform, setPlatform] = useState<string>(PLATFORM_OPTIONS[0].value);
   const [feePct, setFeePct] = useState<number>(PLATFORM_OPTIONS[0].feePct);
+  const [showDetails, setShowDetails] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -49,6 +50,7 @@ export function SaleForm({ recipes }: { recipes: { id: string; name: string }[] 
         form.reset();
         setPlatform(PLATFORM_OPTIONS[0].value);
         setFeePct(PLATFORM_OPTIONS[0].feePct);
+        setShowDetails(false);
       }
     });
   };
@@ -91,80 +93,110 @@ export function SaleForm({ recipes }: { recipes: { id: string; name: string }[] 
           />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-text-secondary">Platform</label>
-          <select
-            name="platform"
-            value={platform}
-            onChange={(e) => onPlatformChange(e.target.value)}
-            className="mt-1 w-full field-input"
-          >
-            {PLATFORM_OPTIONS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+      <button
+        type="button"
+        onClick={() => setShowDetails((v) => !v)}
+        className="text-xs text-accent underline underline-offset-2"
+      >
+        {showDetails
+          ? "Hide details"
+          : "Add details (platform, payment, date, customer, notes)"}
+      </button>
+
+      {!showDetails && (
+        <>
+          <input type="hidden" name="platform" value={platform} />
+          <input type="hidden" name="platform_fee_pct" value={feePct} />
+          <input type="hidden" name="payment_status" value="paid" />
+          <input type="hidden" name="sale_date" value={todayISO()} />
+        </>
+      )}
+
+      {showDetails && (
+        <div className="space-y-3 rounded-lg border border-border bg-bg p-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">Platform</label>
+              <select
+                name="platform"
+                value={platform}
+                onChange={(e) => onPlatformChange(e.target.value)}
+                className="mt-1 w-full field-input"
+              >
+                {PLATFORM_OPTIONS.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">
+                Platform fee %
+              </label>
+              <input
+                name="platform_fee_pct"
+                type="number"
+                inputMode="decimal"
+                step="any"
+                min="0"
+                max="100"
+                value={feePct}
+                onChange={(e) => setFeePct(Number(e.target.value))}
+                className="mt-1 w-full field-input"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">
+                Payment status
+              </label>
+              <select name="payment_status" defaultValue="paid" className="mt-1 w-full field-input">
+                <option value="paid">Paid</option>
+                <option value="pending">Pending</option>
+                <option value="refunded">Refunded</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">
+                Payment method (optional)
+              </label>
+              <input
+                name="payment_method"
+                placeholder="cash, transfer, cod…"
+                className="mt-1 w-full field-input"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">Date</label>
+            <input
+              name="sale_date"
+              type="date"
+              defaultValue={todayISO()}
+              className="mt-1 w-full field-input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">
+              Customer / room (optional)
+            </label>
+            <input
+              name="customer_ref"
+              placeholder="e.g. room number, name — powers repeat-customer stats"
+              className="mt-1 w-full field-input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">
+              Notes (optional)
+            </label>
+            <textarea name="notes" rows={2} className="mt-1 w-full field-input" />
+          </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-text-secondary">Platform fee %</label>
-          <input
-            name="platform_fee_pct"
-            type="number"
-            inputMode="decimal"
-            step="any"
-            min="0"
-            max="100"
-            value={feePct}
-            onChange={(e) => setFeePct(Number(e.target.value))}
-            className="mt-1 w-full field-input"
-          />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-text-secondary">Payment status</label>
-          <select name="payment_status" defaultValue="paid" className="mt-1 w-full field-input">
-            <option value="paid">Paid</option>
-            <option value="pending">Pending</option>
-            <option value="refunded">Refunded</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-text-secondary">
-            Payment method (optional)
-          </label>
-          <input
-            name="payment_method"
-            placeholder="cash, transfer, cod…"
-            className="mt-1 w-full field-input"
-          />
-        </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-text-secondary">Date</label>
-        <input
-          name="sale_date"
-          type="date"
-          defaultValue={todayISO()}
-          className="mt-1 w-full field-input"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-text-secondary">
-          Customer / room (optional)
-        </label>
-        <input
-          name="customer_ref"
-          placeholder="e.g. room number, name — powers repeat-customer stats"
-          className="mt-1 w-full field-input"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-text-secondary">Notes (optional)</label>
-        <textarea name="notes" rows={2} className="mt-1 w-full field-input" />
-      </div>
+      )}
+
       {error && <p className="text-sm text-alert">{error}</p>}
       {success && <p className="text-sm text-success">Sale logged and stock deducted.</p>}
       <button type="submit" disabled={isPending} className="w-full btn-primary">

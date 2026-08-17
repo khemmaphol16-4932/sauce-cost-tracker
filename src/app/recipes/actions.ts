@@ -73,14 +73,25 @@ export async function updateRecipe(formData: FormData): Promise<ActionResult> {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "Name is required" };
 
+  // Made-to-order recipes have no batch to speak of — force the batch/volume
+  // fields to a fixed "1 order = 1 batch" shape (batch_volume_ml ==
+  // bottle_size_ml, no evaporation/waste) so calcRecipeCost's existing
+  // per-bottle math keeps working unchanged, just with qty_used meaning
+  // "per order" instead of "per batch". Whatever the client sent for these
+  // fields is ignored in that case, not just hidden in the UI.
+  const isMadeToOrder = formData.get("is_made_to_order") === "on";
+
   const { error } = await supabase
     .from("recipes")
     .update({
       name,
-      bottle_size_ml: Number(formData.get("bottle_size_ml")),
-      batch_volume_ml: Number(formData.get("batch_volume_ml")),
-      evaporation_loss_pct: clampPct(Number(formData.get("evaporation_loss_pct") || 0)),
-      waste_pct: clampPct(Number(formData.get("waste_pct") || 0)),
+      is_made_to_order: isMadeToOrder,
+      bottle_size_ml: isMadeToOrder ? 1 : Number(formData.get("bottle_size_ml")),
+      batch_volume_ml: isMadeToOrder ? 1 : Number(formData.get("batch_volume_ml")),
+      evaporation_loss_pct: isMadeToOrder
+        ? 0
+        : clampPct(Number(formData.get("evaporation_loss_pct") || 0)),
+      waste_pct: isMadeToOrder ? 0 : clampPct(Number(formData.get("waste_pct") || 0)),
       labor_hours_per_batch: Number(formData.get("labor_hours_per_batch") || 0),
       labor_rate_per_hour: Number(formData.get("labor_rate_per_hour") || 0),
       overhead_per_batch: Number(formData.get("overhead_per_batch") || 0),

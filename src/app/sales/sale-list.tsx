@@ -154,7 +154,7 @@ export function SaleListRow({ sale, businessName }: { sale: SaleRow; businessNam
           onVoid();
         }}
         title="Void sale"
-        message={`Void this sale of ${sale.qty_bottles} bottles (${sale.recipe_name})? This credits the bottles back to stock. This cannot be undone.`}
+        message={`Void this sale of ${sale.qty_bottles} bottles (${sale.recipe_name})? Whatever it used — finished-goods stock or raw ingredients — is credited back. This cannot be undone.`}
         confirmLabel="Void"
         isPending={isPending}
       />

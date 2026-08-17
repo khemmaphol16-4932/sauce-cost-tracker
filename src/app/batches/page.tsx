@@ -6,7 +6,8 @@ import { BatchHistoryRow } from "./batch-history-row";
 import { YieldVarianceCard } from "./yield-variance-card";
 
 export default async function BatchesPage() {
-  const recipeSummaries = await getRecipes();
+  const allRecipes = await getRecipes();
+  const recipeSummaries = allRecipes.filter((r) => !r.is_made_to_order);
 
   const recipes = await Promise.all(
     recipeSummaries.map(async (r) => {

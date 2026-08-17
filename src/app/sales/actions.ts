@@ -49,22 +49,42 @@ export async function logSale(formData: FormData): Promise<ActionResult> {
 
   const businessId = await getCurrentBusinessId();
 
-  const { error } = await supabase.from("sales").insert({
-    user_id: user.id,
-    business_id: businessId,
-    recipe_id: recipeId,
-    qty_bottles: qtyBottles,
-    price_charged_total: priceChargedTotal,
-    platform,
-    platform_fee_pct: platformFeePct,
-    payment_status: paymentStatus,
-    payment_method: paymentMethod || null,
-    sale_date: saleDateRaw || undefined,
-    cost_per_bottle_snapshot: cost.costPerBottle,
-    customer_ref: customerRef || null,
-    notes: notes || null,
-  });
+  const { data: sale, error } = await supabase
+    .from("sales")
+    .insert({
+      user_id: user.id,
+      business_id: businessId,
+      recipe_id: recipeId,
+      qty_bottles: qtyBottles,
+      price_charged_total: priceChargedTotal,
+      platform,
+      platform_fee_pct: platformFeePct,
+      payment_status: paymentStatus,
+      payment_method: paymentMethod || null,
+      sale_date: saleDateRaw || undefined,
+      cost_per_bottle_snapshot: cost.costPerBottle,
+      customer_ref: customerRef || null,
+      notes: notes || null,
+    })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
+
+  // Made-to-order recipes deduct raw ingredients directly (the trigger just
+  // did it) instead of finished-goods stock — snapshot what was used here,
+  // same reasoning as batch_ingredient_usage, so voiding this sale later
+  // restores the amount actually deducted rather than recomputing from
+  // (possibly since-edited) recipe_ingredients.
+  if (detail.recipe.is_made_to_order && detail.ingredients.length > 0) {
+    const { error: usageError } = await supabase.from("sale_ingredient_usage").insert(
+      detail.ingredients.map((i) => ({
+        sale_id: sale.id,
+        ingredient_id: i.ingredient_id,
+        qty_used: i.qty_used * qtyBottles,
+      }))
+    );
+    if (usageError) return { error: usageError.message };
+  }
 
   revalidatePath("/sales");
   revalidatePath("/stock");
@@ -114,14 +134,43 @@ export async function deleteSale(formData: FormData): Promise<ActionResult> {
   if (fetchError) return { error: fetchError.message };
   if (!sale) return { error: "Sale not found" };
 
+  // Read the ingredient-usage snapshot before deleting — it cascades away
+  // with the sale row, and its presence is what tells us whether this was
+  // a made-to-order sale (raw ingredients to restore) or a batch-produced
+  // one (finished-goods stock to restore).
+  const { data: usage, error: usageError } = await supabase
+    .from("sale_ingredient_usage")
+    .select("ingredient_id, qty_used")
+    .eq("sale_id", id);
+  if (usageError) return { error: usageError.message };
+
   const { error: deleteError } = await supabase.from("sales").delete().eq("id", id);
   if (deleteError) return { error: deleteError.message };
 
-  const { error: creditError } = await supabase.rpc("adjust_finished_goods_stock", {
-    p_recipe_id: sale.recipe_id,
-    p_delta: sale.qty_bottles,
-  });
-  if (creditError) return { error: creditError.message };
+  if (usage && usage.length > 0) {
+    const ingredientIds = usage.map((u) => u.ingredient_id);
+    const { data: ingredients, error: ingredientsError } = await supabase
+      .from("ingredients")
+      .select("id, qty_on_hand")
+      .in("id", ingredientIds);
+    if (ingredientsError) return { error: ingredientsError.message };
+
+    const qtyById = new Map((ingredients ?? []).map((i) => [i.id, i.qty_on_hand]));
+    for (const u of usage) {
+      const current = qtyById.get(u.ingredient_id) ?? 0;
+      const { error: restoreError } = await supabase
+        .from("ingredients")
+        .update({ qty_on_hand: current + u.qty_used })
+        .eq("id", u.ingredient_id);
+      if (restoreError) return { error: restoreError.message };
+    }
+  } else {
+    const { error: creditError } = await supabase.rpc("adjust_finished_goods_stock", {
+      p_recipe_id: sale.recipe_id,
+      p_delta: sale.qty_bottles,
+    });
+    if (creditError) return { error: creditError.message };
+  }
 
   revalidatePath("/sales");
   revalidatePath("/stock");

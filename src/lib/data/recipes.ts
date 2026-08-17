@@ -6,6 +6,7 @@ export type RecipeSummary = {
   name: string;
   bottle_size_ml: number;
   target_sell_price: number | null;
+  is_made_to_order: boolean;
 };
 
 export async function getRecipes(): Promise<RecipeSummary[]> {
@@ -13,7 +14,7 @@ export async function getRecipes(): Promise<RecipeSummary[]> {
   const businessId = await getCurrentBusinessId();
   const { data, error } = await supabase
     .from("recipes")
-    .select("id, name, bottle_size_ml, target_sell_price")
+    .select("id, name, bottle_size_ml, target_sell_price, is_made_to_order")
     .eq("business_id", businessId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
@@ -33,6 +34,7 @@ export type RecipeDetail = {
   waste_pct: number;
   evaporation_loss_pct: number;
   batch_volume_ml: number;
+  is_made_to_order: boolean;
 };
 
 export type RecipeIngredientRow = {

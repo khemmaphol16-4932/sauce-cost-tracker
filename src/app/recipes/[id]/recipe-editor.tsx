@@ -91,7 +91,13 @@ export function RecipeEditor({
   const summary = useMemo(
     () =>
       calcRecipeCost(
-        draft,
+        // Made-to-order recipes are saved as a fixed "1 order = 1 batch"
+        // shape (see updateRecipe) regardless of whatever these fields
+        // currently hold — mirror that here so the live preview matches
+        // what saving will actually produce.
+        draft.is_made_to_order
+          ? { ...draft, batch_volume_ml: 1, bottle_size_ml: 1, evaporation_loss_pct: 0, waste_pct: 0 }
+          : draft,
         optimisticIngredients.map((i) => ({
           qty_used: i.qty_used,
           avg_price_per_unit: i.avg_price_per_unit,
@@ -108,6 +114,7 @@ export function RecipeEditor({
     const formData = new FormData();
     formData.set("id", draft.id);
     formData.set("name", draft.name);
+    if (draft.is_made_to_order) formData.set("is_made_to_order", "on");
     formData.set("bottle_size_ml", String(draft.bottle_size_ml));
     formData.set("batch_volume_ml", String(draft.batch_volume_ml));
     formData.set("evaporation_loss_pct", String(draft.evaporation_loss_pct));
@@ -151,18 +158,37 @@ export function RecipeEditor({
                 : `${summary.marginPct.toFixed(0)}% margin`}
           </span>
         </div>
-        <p className="mt-1 text-xs text-text-secondary">
-          ~{summary.bottlesPerBatch} bottles/batch ({summary.bottlesPerBatchRaw.toFixed(1)} raw)
-        </p>
+        {!draft.is_made_to_order && (
+          <p className="mt-1 text-xs text-text-secondary">
+            ~{summary.bottlesPerBatch} bottles/batch ({summary.bottlesPerBatchRaw.toFixed(1)} raw)
+          </p>
+        )}
         <dl className="mt-3 space-y-1 text-sm">
-          <Row label="Raw materials / bottle" value={summary.rawMaterialCostPerBottle} />
+          <Row
+            label={draft.is_made_to_order ? "Raw materials / order" : "Raw materials / bottle"}
+            value={summary.rawMaterialCostPerBottle}
+          />
           <Row label="Packaging / bottle" value={summary.packagingCostPerBottle} />
-          <Row label="Labor / bottle" value={summary.laborCostPerBottle} />
-          <Row label="Overhead / bottle" value={summary.overheadCostPerBottle} />
-          <Row label="Cost / bottle" value={summary.costPerBottle} bold />
+          <Row
+            label={draft.is_made_to_order ? "Labor / order" : "Labor / bottle"}
+            value={summary.laborCostPerBottle}
+          />
+          <Row
+            label={draft.is_made_to_order ? "Overhead / order" : "Overhead / bottle"}
+            value={summary.overheadCostPerBottle}
+          />
+          <Row
+            label={draft.is_made_to_order ? "Cost / order" : "Cost / bottle"}
+            value={summary.costPerBottle}
+            bold
+          />
           <Row label="Platform fee / bottle" value={summary.platformFeeAmount} />
           <Row label="VAT / bottle" value={summary.vatAmount} />
-          <Row label="Profit / bottle" value={summary.profitPerBottle} bold />
+          <Row
+            label={draft.is_made_to_order ? "Profit / order" : "Profit / bottle"}
+            value={summary.profitPerBottle}
+            bold
+          />
         </dl>
         <p className="mt-3 text-[11px] leading-snug text-text-secondary">
           Tax note: net profit is taxable personal income if you&apos;re unregistered/no VAT.
@@ -183,30 +209,52 @@ export function RecipeEditor({
             className="w-full field-input"
           />
         </Field>
+        <label className="flex items-start gap-2 text-sm text-text">
+          <input
+            type="checkbox"
+            checked={draft.is_made_to_order}
+            onChange={(e) => set("is_made_to_order", e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Made to order
+            <span className="block text-xs text-text-secondary">
+              Cooked fresh per sale, not batch-produced — ingredients deduct directly when a sale
+              is logged, and this recipe won&apos;t show up on the Batches tab.
+            </span>
+          </span>
+        </label>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Batch volume (ml)">
-            <NumberInput value={draft.batch_volume_ml} onChange={(v) => set("batch_volume_ml", v)} />
-          </Field>
-          <Field label="Bottle size (ml)">
-            <NumberInput value={draft.bottle_size_ml} onChange={(v) => set("bottle_size_ml", v)} />
-          </Field>
-          <Field label="Evaporation loss %">
-            <NumberInput
-              value={draft.evaporation_loss_pct}
-              onChange={(v) => set("evaporation_loss_pct", v)}
-              min={0}
-              max={100}
-            />
-          </Field>
-          <Field label="Waste %">
-            <NumberInput
-              value={draft.waste_pct}
-              onChange={(v) => set("waste_pct", v)}
-              min={0}
-              max={100}
-            />
-          </Field>
-          <Field label="Labor hours/batch">
+          {!draft.is_made_to_order && (
+            <>
+              <Field label="Batch volume (ml)">
+                <NumberInput
+                  value={draft.batch_volume_ml}
+                  onChange={(v) => set("batch_volume_ml", v)}
+                />
+              </Field>
+              <Field label="Bottle size (ml)">
+                <NumberInput value={draft.bottle_size_ml} onChange={(v) => set("bottle_size_ml", v)} />
+              </Field>
+              <Field label="Evaporation loss %">
+                <NumberInput
+                  value={draft.evaporation_loss_pct}
+                  onChange={(v) => set("evaporation_loss_pct", v)}
+                  min={0}
+                  max={100}
+                />
+              </Field>
+              <Field label="Waste %">
+                <NumberInput
+                  value={draft.waste_pct}
+                  onChange={(v) => set("waste_pct", v)}
+                  min={0}
+                  max={100}
+                />
+              </Field>
+            </>
+          )}
+          <Field label={draft.is_made_to_order ? "Labor hours/order" : "Labor hours/batch"}>
             <NumberInput
               value={draft.labor_hours_per_batch}
               onChange={(v) => set("labor_hours_per_batch", v)}
@@ -218,7 +266,7 @@ export function RecipeEditor({
               onChange={(v) => set("labor_rate_per_hour", v)}
             />
           </Field>
-          <Field label="Overhead / batch (฿)">
+          <Field label={draft.is_made_to_order ? "Overhead / order (฿)" : "Overhead / batch (฿)"}>
             <NumberInput
               value={draft.overhead_per_batch}
               onChange={(v) => set("overhead_per_batch", v)}

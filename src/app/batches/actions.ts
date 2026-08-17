@@ -29,6 +29,12 @@ export async function logBatch(formData: FormData): Promise<ActionResult> {
   const overrideRaw = String(formData.get("actual_yield_bottles") ?? "").trim();
   const actualYieldBottles = overrideRaw ? Number(overrideRaw) : cost.bottlesPerBatch;
 
+  // Ingredient deduction scales with how much was actually produced, not
+  // the recipe's full nominal batch — a half batch should only use half
+  // the ingredients. Falls back to 1 (today's full-deduction behavior) for
+  // recipes with no usable estimate yet.
+  const yieldRatio = cost.bottlesPerBatch > 0 ? actualYieldBottles / cost.bottlesPerBatch : 1;
+
   const batchDateRaw = String(formData.get("batch_date") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
 
@@ -41,6 +47,7 @@ export async function logBatch(formData: FormData): Promise<ActionResult> {
       actual_yield_bottles: actualYieldBottles,
       notes: notes || null,
       cost_per_bottle_snapshot: cost.costPerBottle,
+      yield_ratio: yieldRatio,
     })
     .select("id")
     .single();
@@ -51,7 +58,7 @@ export async function logBatch(formData: FormData): Promise<ActionResult> {
       detail.ingredients.map((i) => ({
         batch_id: batch.id,
         ingredient_id: i.ingredient_id,
-        qty_used: i.qty_used,
+        qty_used: i.qty_used * yieldRatio,
       }))
     );
     if (usageError) return { error: usageError.message };

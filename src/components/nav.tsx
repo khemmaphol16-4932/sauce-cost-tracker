@@ -7,7 +7,7 @@ export function Nav() {
     <>
       <header className="sticky top-0 z-10 border-b border-border bg-bg/95 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-2 px-4 py-3">
-          <span className="shrink-0 text-lg font-semibold tracking-tight text-text">
+          <span className="shrink-0 text-base font-semibold tracking-tight text-text-secondary">
             Ordexa
           </span>
           <div className="flex items-center gap-3">

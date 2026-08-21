@@ -3,11 +3,18 @@
 import { useState, useTransition } from "react";
 import { Modal } from "@/components/modal";
 import { ConfirmModal } from "@/components/confirm-modal";
-import { deleteIngredient, logPurchase, updateIngredient } from "./actions";
+import { ReasonPills } from "@/components/reason-pills";
+import {
+  adjustIngredientStock,
+  deleteIngredient,
+  logPurchase,
+  updateIngredient,
+} from "./actions";
 import type { IngredientWithLastPurchase } from "@/lib/data/ingredients";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const NEW_BRAND_VALUE = "__new__";
+const COUNT_REASONS = ["recount", "spoiled", "used unrecorded", "other"] as const;
 
 export function IngredientRow({
   ingredient,
@@ -18,10 +25,16 @@ export function IngredientRow({
 }) {
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [countOpen, setCountOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [brandChoice, setBrandChoice] = useState("");
+  const [countReason, setCountReason] = useState<string>(COUNT_REASONS[0]);
+  const [countedQty, setCountedQty] = useState(String(ingredient.qty_on_hand));
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  const countedDelta = Number(countedQty) - ingredient.qty_on_hand;
+  const countedDeltaValid = countedQty !== "" && Number.isFinite(Number(countedQty));
 
   const isLow =
     ingredient.low_stock_threshold != null &&
@@ -60,6 +73,24 @@ export function IngredientRow({
     });
   };
 
+  const openCount = () => {
+    setCountedQty(String(ingredient.qty_on_hand));
+    setCountReason(COUNT_REASONS[0]);
+    setError(null);
+    setCountOpen(true);
+  };
+
+  const submitCount = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    setError(null);
+    startTransition(async () => {
+      const result = await adjustIngredientStock(formData);
+      if (result?.error) setError(result.error);
+      else setCountOpen(false);
+    });
+  };
+
   return (
     <li className="flex items-center gap-3 border-b border-border py-3 last:border-0">
       <button
@@ -90,11 +121,88 @@ export function IngredientRow({
       </button>
 
       <button
+        onClick={openCount}
+        className="shrink-0 rounded-xl border border-border px-3 py-3 text-sm font-medium text-text-secondary active:bg-surface-hover"
+      >
+        Count
+      </button>
+
+      <button
         onClick={() => setPurchaseOpen(true)}
         className="shrink-0 rounded-xl bg-accent px-4 py-3 text-sm font-medium text-[#121212] active:bg-accent/80"
       >
         + Purchase
       </button>
+
+      <Modal
+        open={countOpen}
+        onClose={() => setCountOpen(false)}
+        title={`Stock count — ${ingredient.name}`}
+      >
+        <form onSubmit={submitCount} className="space-y-4">
+          <input type="hidden" name="ingredient_id" value={ingredient.id} />
+          <p className="text-sm text-text-secondary">
+            Recorded: <span className="font-mono">{ingredient.qty_on_hand}</span>{" "}
+            {ingredient.unit}
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">
+              Actual counted quantity ({ingredient.unit})
+            </label>
+            <input
+              name="counted_qty"
+              type="number"
+              inputMode="decimal"
+              step="any"
+              min="0"
+              required
+              autoFocus
+              value={countedQty}
+              onChange={(e) => setCountedQty(e.target.value)}
+              className="mt-1 w-full field-input"
+            />
+            {countedDeltaValid && countedDelta !== 0 && (
+              <p className="mt-1 text-xs text-text-secondary">
+                Will change by {countedDelta > 0 ? "+" : "−"}
+                {Math.abs(countedDelta)} {ingredient.unit}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">Reason</label>
+            <div className="mt-1">
+              <ReasonPills
+                options={COUNT_REASONS}
+                value={countReason}
+                onChange={setCountReason}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">
+              Note (optional)
+            </label>
+            <input name="notes" className="mt-1 w-full field-input" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary">Date</label>
+            <input
+              name="adjustment_date"
+              type="date"
+              defaultValue={todayISO()}
+              className="mt-1 w-full field-input"
+            />
+          </div>
+          <p className="text-xs text-text-secondary">
+            This corrects the quantity only — your average cost per {ingredient.unit} is
+            not affected.
+          </p>
+          {error && <p className="text-sm text-alert">{error}</p>}
+          <button type="submit" disabled={isPending} className="w-full btn-primary">
+            {isPending ? "Saving…" : "Save count"}
+          </button>
+        </form>
+      </Modal>
 
       <Modal
         open={purchaseOpen}
@@ -160,6 +268,10 @@ export function IngredientRow({
               required
               className="mt-1 w-full field-input"
             />
+            <p className="mt-1 text-xs text-text-secondary">
+              Correcting a stock count? Use <span className="text-text">Count</span> instead —
+              purchases change your average cost.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-text-secondary">Date</label>

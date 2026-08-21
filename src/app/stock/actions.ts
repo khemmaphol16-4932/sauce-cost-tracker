@@ -147,6 +147,40 @@ export async function logPurchase(formData: FormData): Promise<ActionResult> {
   revalidatePath("/financials/purchases");
 }
 
+// Records a physical stock count. The operator enters what they actually
+// counted; the RPC derives the delta from the live row and writes both the
+// stock change and its ledger entry in one transaction. Deliberately never
+// touches avg_price_per_unit — that is exactly the property the "log a ฿1
+// purchase to fix the count" workaround violated.
+export async function adjustIngredientStock(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await requireUser();
+
+  const ingredientId = String(formData.get("ingredient_id"));
+  const countedQty = Number(formData.get("counted_qty"));
+  const reason = String(formData.get("reason") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+  const adjustmentDateRaw = String(formData.get("adjustment_date") ?? "").trim();
+
+  if (!ingredientId) return { error: "Pick an ingredient" };
+  if (!Number.isFinite(countedQty) || countedQty < 0) {
+    return { error: "Enter the quantity you counted (0 or more)" };
+  }
+  if (!reason) return { error: "Pick a reason" };
+
+  const { error } = await supabase.rpc("adjust_ingredient_stock", {
+    p_ingredient_id: ingredientId,
+    p_counted_qty: countedQty,
+    p_reason: reason,
+    p_notes: notes || null,
+    p_adjustment_date: adjustmentDateRaw || undefined,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/stock");
+  revalidatePath("/stock/low");
+  revalidatePath("/dashboard");
+}
+
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();

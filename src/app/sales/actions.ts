@@ -161,23 +161,36 @@ export async function updateFinishedGoodsThreshold(formData: FormData): Promise<
   revalidatePath("/stock/low");
 }
 
+// Records a physical count of bottles on hand. Takes the counted quantity
+// rather than a delta (the operator counts the shelf, not the difference), and
+// goes through adjust_finished_goods_counted so the reason is persisted to the
+// stock_adjustments ledger — it used to be collected and then thrown away.
 export async function adjustFinishedGoods(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();
 
   const recipeId = String(formData.get("recipe_id"));
-  const delta = Number(formData.get("delta"));
+  const countedQty = Number(formData.get("counted_qty"));
   const reason = String(formData.get("reason") ?? "").trim();
-  if (!recipeId || !Number.isFinite(delta) || delta === 0) {
-    return { error: "Pick a recipe and a non-zero adjustment amount" };
-  }
-  if (!reason) return { error: "A reason is required (e.g. breakage, sample, miscounted)" };
+  const notes = String(formData.get("notes") ?? "").trim();
+  const adjustmentDateRaw = String(formData.get("adjustment_date") ?? "").trim();
 
-  const { error } = await supabase.rpc("adjust_finished_goods_stock", {
+  if (!recipeId) return { error: "Pick a recipe" };
+  if (!Number.isFinite(countedQty) || countedQty < 0) {
+    return { error: "Enter the number of bottles you counted (0 or more)" };
+  }
+  if (!reason) return { error: "Pick a reason" };
+
+  const { error } = await supabase.rpc("adjust_finished_goods_counted", {
     p_recipe_id: recipeId,
-    p_delta: delta,
+    p_counted_qty: countedQty,
+    p_reason: reason,
+    p_notes: notes || null,
+    p_adjustment_date: adjustmentDateRaw || undefined,
   });
   if (error) return { error: error.message };
 
   revalidatePath("/stock");
+  revalidatePath("/stock/low");
   revalidatePath("/sales");
+  revalidatePath("/dashboard");
 }

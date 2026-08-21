@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ordexa — Offline Preview</title>
+  <link rel="stylesheet" href="variables.css">
+  <link rel="stylesheet" href="layout.css">
+  <link rel="stylesheet" href="components.css">
+</head>
+<body>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="mark">O</div>
+        <div>
+          <div class="name">Ordexa</div>
+          <span class="tag">offline preview</span>
+        </div>
+      </div>
+
+      <button class="nav-btn" data-section="dashboard" onclick="nav('dashboard')"><span class="icon">◱</span><span>Dashboard</span></button>
+      <button class="nav-btn" data-section="stock" onclick="nav('stock')"><span class="icon">▤</span><span>Stock</span></button>
+      <button class="nav-btn" data-section="recipes" onclick="nav('recipes')"><span class="icon">✎</span><span>Recipes</span></button>
+      <button class="nav-btn" data-section="batches" onclick="nav('batches')"><span class="icon">⟳</span><span>Batches</span></button>
+      <button class="nav-btn" data-section="sales" onclick="nav('sales')"><span class="icon">฿</span><span>Sales</span></button>
+      <button class="nav-btn" data-section="financials" onclick="nav('financials')"><span class="icon">▦</span><span>Financials</span></button>
+      <button class="nav-btn" data-section="analytics" onclick="nav('analytics')"><span class="icon">◈</span><span>Analytics</span></button>
+
+      <div class="sidebar-footer">
+        Not the real app.<br>No backend, no sync — data saved to this browser only.
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="section" id="section-dashboard"></div>
+      <div class="section" id="section-stock"></div>
+      <div class="section" id="section-recipes"></div>
+      <div class="section" id="section-batches"></div>
+      <div class="section" id="section-sales"></div>
+      <div class="section" id="section-financials"></div>
+      <div class="section" id="section-analytics"></div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2 id="modal-title"></h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+  <script src="dashboard.js"></script>
+  <script src="stock.js"></script>
+  <script src="recipes.js"></script>
+  <script src="batches.js"></script>
+  <script src="sales.js"></script>
+  <script src="financials.js"></script>
+  <script src="analytics.js"></script>
+</body>
+</html>

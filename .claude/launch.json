@@ -4,8 +4,20 @@
     {
       "name": "ordexa-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "ordexa-mockup",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-Command",
+        "$root = Join-Path (Get-Location).Path 'preview'; $listener=[System.Net.HttpListener]::new(); $listener.Prefixes.Add('http://localhost:5504/'); $listener.Start(); $mime=@{'.html'='text/html';'.js'='text/javascript';'.css'='text/css';'.json'='application/json'}; while($listener.IsListening){ $ctx=$listener.GetContext(); $p=$ctx.Request.Url.LocalPath; if($p -eq '/'){$p='/index.html'}; $fp=Join-Path $root $p.TrimStart('/'); try{ $bytes=[System.IO.File]::ReadAllBytes($fp); $ext=[System.IO.Path]::GetExtension($fp); $ct=$mime[$ext]; if(-not $ct){$ct='application/octet-stream'}; $ctx.Response.ContentType=$ct; $ctx.Response.OutputStream.Write($bytes,0,$bytes.Length) }catch{ $ctx.Response.StatusCode=404 }; $ctx.Response.Close() }"
+      ],
+      "port": 5504
     }
   ]
 }

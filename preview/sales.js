@@ -97,9 +97,17 @@ function render_sales() {
           </div>
           <div class="field"><label>Date</label><input id="f-date" type="date" value="${todayISO()}"></div>
         </div>
-        <div class="field" style="margin-top:8px">
-          <label>Customer / room (optional)</label>
-          <input id="f-customer" placeholder="e.g. table 3, Nok">
+        <div class="field-row" style="margin-top:8px">
+          <div class="field"><label>Payment method</label>
+            <select id="f-payment-method">
+              <option value="cash">Cash</option>
+              <option value="transfer">Transfer</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="field"><label>Customer / room (optional)</label>
+            <input id="f-customer" placeholder="e.g. table 3, Nok">
+          </div>
         </div>
         <button class="btn btn-primary" style="margin-top:10px" onclick="submitLogSale()">Log sale</button>
       `}
@@ -119,6 +127,7 @@ function render_sales() {
                 </div>
                 <div class="row-actions">
                   <span class="value">${money(s.price_charged_total)}</span>
+                  <button class="btn btn-ghost btn-sm" onclick="printReceipt('${s.id}')">Print</button>
                   <button class="btn btn-danger btn-sm" onclick="voidSale('${s.id}')">Void</button>
                 </div>
               </li>`;
@@ -211,6 +220,7 @@ function submitQuickSell(recipeId) {
     price_charged_total: qty * unitPrice,
     platform,
     payment_status: "paid",
+    payment_method: "cash",
     sale_date: todayISO(),
     customer_ref: customer,
     notes: "",
@@ -232,6 +242,7 @@ function submitLogSale() {
   const price = Number(document.getElementById("f-price").value);
   const platform = document.getElementById("f-platform").value;
   const date = document.getElementById("f-date").value || todayISO();
+  const paymentMethod = document.getElementById("f-payment-method").value;
   const customer = document.getElementById("f-customer").value.trim();
   if (!(qty > 0) || !(price >= 0)) return showToast("Valid quantity and price required", true);
 
@@ -244,13 +255,29 @@ function submitLogSale() {
   const cost = calcRecipeCost(r);
   sales.push({
     id: uid(), recipe_id: recipeId, qty_bottles: qty, price_charged_total: price,
-    platform, payment_status: "paid", sale_date: date, customer_ref: customer, notes: "",
+    platform, payment_status: "paid", payment_method: paymentMethod,
+    sale_date: date, customer_ref: customer, notes: "",
     cost_per_bottle_snapshot: cost.costPerBottle,
   });
 
   saveAll();
   showToast("Sale logged, stock deducted");
   render_sales();
+}
+
+// ---- Receipt printing (mirrors src/lib/receipt.ts + PrintReceiptButton) ----
+function printReceipt(id) {
+  const s = sales.find((x) => x.id === id);
+  if (!s) return;
+  const r = recipes.find((x) => x.id === s.recipe_id);
+
+  shareOrDownloadReceipt({
+    businessName: "Ordexa",
+    dateLabel: s.sale_date,
+    lines: [{ name: r ? r.name : "(deleted recipe)", qty: s.qty_bottles, price: s.price_charged_total }],
+    total: s.price_charged_total,
+    customerRef: s.customer_ref,
+  }).catch(() => showToast("Could not create the receipt", true));
 }
 
 function voidSale(id) {

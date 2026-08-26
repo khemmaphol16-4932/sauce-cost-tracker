@@ -6,7 +6,10 @@ function render_stock() {
   el.innerHTML = `
     <div class="section-header">
       <div><h1>Stock</h1><p>${lowCount > 0 ? lowCount + " item(s) below threshold" : "All stock healthy"}</p></div>
-      <button class="btn btn-primary btn-sm" onclick="openAddIngredientModal()">+ Ingredient</button>
+      <div style="display:flex;gap:8px">
+        ${ingredients.length > 0 ? '<button class="btn btn-ghost btn-sm" onclick="openPurchaseTripModal()">Purchase trip</button>' : ""}
+        <button class="btn btn-primary btn-sm" onclick="openAddIngredientModal()">+ Ingredient</button>
+      </div>
     </div>
 
     ${finishedGoods.length > 0 ? `
@@ -132,6 +135,92 @@ function openPurchaseModal(id) {
     </p>
     <button class="btn btn-primary" onclick="submitPurchase('${id}')">Save purchase</button>
   `);
+}
+
+// ---- Purchase trip: log several ingredient purchases from one shopping trip
+// in a single submission (mirrors logPurchaseTrip in the real app). Each
+// line still updates avg_price_per_unit the same way a single purchase does.
+let tripLines = [];
+let tripDate = todayISO();
+
+function openPurchaseTripModal() {
+  tripLines = [];
+  tripDate = todayISO();
+  renderPurchaseTripModal();
+}
+
+function renderPurchaseTripModal() {
+  const ingredientOptions = ingredients.map((i) => `<option value="${i.id}">${i.name}</option>`).join("");
+  const total = tripLines.reduce((sum, l) => sum + l.price, 0);
+
+  openModal("Log a shopping trip", `
+    <div class="field"><label>Date</label><input id="pt-date" type="date" value="${tripDate}" oninput="tripDate=this.value"></div>
+
+    ${tripLines.length > 0 ? `
+      <ul class="row-list">
+        ${tripLines.map((l, idx) => `
+          <li class="row-item">
+            <div>
+              <div class="main-text">${l.name}</div>
+              <div class="sub-text">${l.qty} ${l.unit} · ${money(l.price)}</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="removeTripLine(${idx})">✕</button>
+          </li>
+        `).join("")}
+      </ul>
+    ` : ""}
+
+    <div class="card" style="padding:12px;border-style:dashed;margin:0">
+      <div class="field"><label>Ingredient</label><select id="pt-ingredient">${ingredientOptions}</select></div>
+      <div class="field-row" style="margin-top:8px">
+        <div class="field"><label>Qty</label><input id="pt-qty" type="number" inputmode="decimal" min="0"></div>
+        <div class="field"><label>Price (฿)</label><input id="pt-price" type="number" inputmode="decimal" min="0"></div>
+      </div>
+      <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="addTripLine()">+ Add to trip</button>
+    </div>
+
+    <button class="btn btn-primary" style="margin-top:10px" onclick="submitPurchaseTrip()" ${tripLines.length === 0 ? "disabled" : ""}>
+      ${tripLines.length > 0 ? `Save trip (${tripLines.length} item${tripLines.length === 1 ? "" : "s"}, ${money(total)})` : "Add items to save"}
+    </button>
+  `);
+}
+
+function addTripLine() {
+  const id = document.getElementById("pt-ingredient").value;
+  const ing = ingredients.find((x) => x.id === id);
+  const qty = Number(document.getElementById("pt-qty").value);
+  const price = Number(document.getElementById("pt-price").value);
+  if (!ing) return showToast("Pick an ingredient", true);
+  if (!(qty > 0)) return showToast("Enter a quantity greater than 0", true);
+  if (!(price >= 0)) return showToast("Enter a price", true);
+
+  tripLines.push({ ingredient_id: id, name: ing.name, unit: ing.unit, qty, price });
+  renderPurchaseTripModal();
+}
+
+function removeTripLine(idx) {
+  tripLines.splice(idx, 1);
+  renderPurchaseTripModal();
+}
+
+function submitPurchaseTrip() {
+  if (tripLines.length === 0) return showToast("Add at least one item", true);
+
+  for (const line of tripLines) {
+    const ing = ingredients.find((x) => x.id === line.ingredient_id);
+    if (!ing) continue;
+    const prevTotalValue = ing.qty_on_hand * ing.avg_price_per_unit;
+    const newQty = ing.qty_on_hand + line.qty;
+    ing.avg_price_per_unit = newQty > 0 ? (prevTotalValue + line.price) / newQty : 0;
+    ing.qty_on_hand = newQty;
+  }
+
+  const count = tripLines.length;
+  saveAll();
+  closeModal();
+  showToast(`Trip saved (${count} item${count === 1 ? "" : "s"})`);
+  tripLines = [];
+  render_stock();
 }
 
 function submitPurchase(id) {

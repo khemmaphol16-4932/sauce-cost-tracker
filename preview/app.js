@@ -66,11 +66,21 @@ let finishedGoods = [];
 let sales = [];
 let expenses = [];
 let stockAdjustments = [];
+let cashReconciliations = [];
 
 function saveAll() {
   localStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify({ ingredients, recipes, batches, finishedGoods, sales, expenses, stockAdjustments })
+    JSON.stringify({
+      ingredients,
+      recipes,
+      batches,
+      finishedGoods,
+      sales,
+      expenses,
+      stockAdjustments,
+      cashReconciliations,
+    })
   );
 }
 
@@ -90,6 +100,7 @@ function loadAll() {
     sales = data.sales || [];
     expenses = data.expenses || [];
     stockAdjustments = data.stockAdjustments || [];
+    cashReconciliations = data.cashReconciliations || [];
   } catch {
     seedData();
     saveAll();
@@ -169,12 +180,13 @@ function seedData() {
   finishedGoods = [{ recipe_id: "rec-nam-prik", qty_on_hand: 12, low_stock_threshold: 5 }];
 
   sales = [
-    { id: "s1", recipe_id: "rec-nam-prik", qty_bottles: 5, price_charged_total: 445, platform: "tiktok", payment_status: "paid", sale_date: todayISO(), customer_ref: "", notes: "" },
+    { id: "s1", recipe_id: "rec-nam-prik", qty_bottles: 5, price_charged_total: 445, platform: "tiktok", payment_status: "paid", payment_method: "transfer", sale_date: todayISO(), customer_ref: "", notes: "" },
   ];
 
   expenses = [{ id: "e1", category: "Packaging", amount: 480, expense_date: todayISO(), notes: "Bottle restock" }];
 
   stockAdjustments = [];
+  cashReconciliations = [];
 }
 
 // ---- Costing (mirrors src/lib/costing.ts calcRecipeCost) ----

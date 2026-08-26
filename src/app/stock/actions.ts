@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 type ActionResult = { error: string } | undefined;
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 async function requireUser() {
   const supabase = await createClient();
@@ -93,6 +94,41 @@ export async function deleteIngredient(formData: FormData): Promise<ActionResult
 
 const NEW_BRAND_VALUE = "__new__";
 
+// Resolves a purchase's brand field: an existing picklist entry, a new one
+// (created if it doesn't already exist for this ingredient, case-insensitive),
+// or none. Shared by logPurchase and logPurchaseTrip so a shopping trip with
+// several lines for the same ingredient/brand doesn't insert duplicate
+// ingredient_brands rows or diverge from the single-purchase behavior.
+async function resolveBrand(
+  supabase: SupabaseServerClient,
+  userId: string,
+  ingredientId: string,
+  brandSelect: string,
+  newBrand: string
+): Promise<{ brand: string | null } | { error: string }> {
+  if (brandSelect === NEW_BRAND_VALUE) {
+    if (!newBrand) return { error: "Enter a name for the new brand" };
+
+    const { data: existingBrand, error: existingBrandError } = await supabase
+      .from("ingredient_brands")
+      .select("name")
+      .eq("ingredient_id", ingredientId)
+      .ilike("name", newBrand)
+      .maybeSingle();
+    if (existingBrandError) return { error: existingBrandError.message };
+
+    if (existingBrand) return { brand: existingBrand.name };
+
+    const { error: brandError } = await supabase
+      .from("ingredient_brands")
+      .insert({ user_id: userId, ingredient_id: ingredientId, name: newBrand });
+    if (brandError) return { error: brandError.message };
+    return { brand: newBrand };
+  }
+  if (brandSelect) return { brand: brandSelect };
+  return { brand: null };
+}
+
 export async function logPurchase(formData: FormData): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
 
@@ -107,30 +143,8 @@ export async function logPurchase(formData: FormData): Promise<ActionResult> {
     return { error: "Valid ingredient, quantity, and price are required" };
   }
 
-  let brand: string | null = null;
-  if (brandSelect === NEW_BRAND_VALUE) {
-    if (!newBrand) return { error: "Enter a name for the new brand" };
-    brand = newBrand;
-
-    const { data: existingBrand, error: existingBrandError } = await supabase
-      .from("ingredient_brands")
-      .select("name")
-      .eq("ingredient_id", ingredientId)
-      .ilike("name", newBrand)
-      .maybeSingle();
-    if (existingBrandError) return { error: existingBrandError.message };
-
-    if (existingBrand) {
-      brand = existingBrand.name;
-    } else {
-      const { error: brandError } = await supabase
-        .from("ingredient_brands")
-        .insert({ user_id: user.id, ingredient_id: ingredientId, name: newBrand });
-      if (brandError) return { error: brandError.message };
-    }
-  } else if (brandSelect) {
-    brand = brandSelect;
-  }
+  const resolved = await resolveBrand(supabase, user.id, ingredientId, brandSelect, newBrand);
+  if ("error" in resolved) return { error: resolved.error };
 
   const { error } = await supabase.from("purchases").insert({
     user_id: user.id,
@@ -138,8 +152,77 @@ export async function logPurchase(formData: FormData): Promise<ActionResult> {
     qty_bought: qtyBought,
     price_paid_total: pricePaidTotal,
     purchase_date: purchaseDateRaw || undefined,
-    brand,
+    brand: resolved.brand,
   });
+  if (error) return { error: error.message };
+
+  revalidatePath("/stock");
+  revalidatePath("/stock/low");
+  revalidatePath("/financials/purchases");
+}
+
+type PurchaseTripLine = {
+  ingredientId: string;
+  qtyBought: number;
+  priceTotal: number;
+  brandSelect: string;
+  newBrand: string;
+};
+
+// Logs several ingredient purchases from one shopping trip in a single
+// submission. Each line still becomes its own `purchases` row (so the
+// per-row weighted-average trigger fires exactly as it does for a single
+// purchase) — this only saves the operator from reopening a modal per
+// ingredient and waiting for a page settle between every one.
+export async function logPurchaseTrip(formData: FormData): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+
+  const purchaseDateRaw = String(formData.get("purchase_date") ?? "").trim();
+  const linesRaw = String(formData.get("lines_json") ?? "");
+
+  let lines: unknown;
+  try {
+    lines = JSON.parse(linesRaw);
+  } catch {
+    return { error: "Something went wrong reading the trip's items" };
+  }
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return { error: "Add at least one item" };
+  }
+
+  const rows: {
+    user_id: string;
+    ingredient_id: string;
+    qty_bought: number;
+    price_paid_total: number;
+    purchase_date: string | undefined;
+    brand: string | null;
+  }[] = [];
+
+  for (const raw of lines as PurchaseTripLine[]) {
+    const ingredientId = String(raw?.ingredientId ?? "");
+    const qtyBought = Number(raw?.qtyBought);
+    const priceTotal = Number(raw?.priceTotal);
+    if (!ingredientId || !(qtyBought > 0) || !(priceTotal >= 0)) {
+      return { error: "Every item needs a valid ingredient, quantity, and price" };
+    }
+
+    const brandSelect = String(raw?.brandSelect ?? "").trim();
+    const newBrand = String(raw?.newBrand ?? "").trim();
+    const resolved = await resolveBrand(supabase, user.id, ingredientId, brandSelect, newBrand);
+    if ("error" in resolved) return { error: resolved.error };
+
+    rows.push({
+      user_id: user.id,
+      ingredient_id: ingredientId,
+      qty_bought: qtyBought,
+      price_paid_total: priceTotal,
+      purchase_date: purchaseDateRaw || undefined,
+      brand: resolved.brand,
+    });
+  }
+
+  const { error } = await supabase.from("purchases").insert(rows);
   if (error) return { error: error.message };
 
   revalidatePath("/stock");

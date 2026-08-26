@@ -3,6 +3,7 @@ import { getIngredientsWithLastPurchase, getIngredientBrandsByIngredient } from 
 import { getFinishedGoodsStock } from "@/lib/data/finished-goods";
 import { IngredientRow } from "./ingredient-row";
 import { AddIngredientButton } from "./add-ingredient-button";
+import { PurchaseTripButton } from "./purchase-trip-button";
 import { FinishedGoodsRow } from "./finished-goods-row";
 
 export default async function StockPage() {
@@ -11,6 +12,8 @@ export default async function StockPage() {
     getFinishedGoodsStock(),
     getIngredientBrandsByIngredient(),
   ]);
+  const ingredientOptions = ingredients.map((i) => ({ id: i.id, name: i.name, unit: i.unit }));
+  const brandsByIngredientObj = Object.fromEntries(brandsByIngredient);
   const lowIngredientCount = ingredients.filter(
     (i) => i.low_stock_threshold != null && i.qty_on_hand < i.low_stock_threshold
   ).length;
@@ -34,6 +37,13 @@ export default async function StockPage() {
           </Link>
         )}
       </div>
+
+      {ingredients.length > 0 && (
+        <PurchaseTripButton
+          ingredients={ingredientOptions}
+          brandsByIngredient={brandsByIngredientObj}
+        />
+      )}
 
       {finishedGoods.length > 0 && (
         <div className="card">

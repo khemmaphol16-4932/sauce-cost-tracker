@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Modal } from "@/components/modal";
 import { ConfirmModal } from "@/components/confirm-modal";
+import { PrintReceiptButton } from "@/components/print-receipt-button";
 import { deleteSale, updateSale } from "./actions";
 import type { SaleRow } from "@/lib/data/sales";
 
@@ -12,7 +13,7 @@ const STATUS_STYLES: Record<string, string> = {
   refunded: "bg-alert-bg text-alert",
 };
 
-export function SaleListRow({ sale }: { sale: SaleRow }) {
+export function SaleListRow({ sale, businessName }: { sale: SaleRow; businessName: string }) {
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -37,6 +38,14 @@ export function SaleListRow({ sale }: { sale: SaleRow }) {
     });
   };
 
+  const receiptData = {
+    businessName,
+    dateLabel: sale.sale_date,
+    lines: [{ name: sale.recipe_name, qty: sale.qty_bottles, price: sale.price_charged_total }],
+    total: sale.price_charged_total,
+    customerRef: sale.customer_ref,
+  };
+
   return (
     <li className="border-b border-border py-3 last:border-0">
       <div className="flex items-start justify-between gap-2">
@@ -59,13 +68,16 @@ export function SaleListRow({ sale }: { sale: SaleRow }) {
           </p>
           {sale.notes && <p className="mt-1 text-sm text-text-secondary">{sale.notes}</p>}
         </button>
-        <button
-          onClick={() => setConfirmOpen(true)}
-          disabled={isPending}
-          className="shrink-0 px-2 text-xs text-alert"
-        >
-          Void
-        </button>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <PrintReceiptButton data={receiptData} />
+          <button
+            onClick={() => setConfirmOpen(true)}
+            disabled={isPending}
+            className="px-2 text-xs text-alert"
+          >
+            Void
+          </button>
+        </div>
       </div>
 
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title={`Edit sale — ${sale.recipe_name}`}>

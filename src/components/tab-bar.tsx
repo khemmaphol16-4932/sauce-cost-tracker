@@ -14,7 +14,7 @@ const TABS = [
 
 // Routes reachable from the "More" page — the tab should still highlight
 // when viewing any of them, not just /more itself.
-const MORE_ROUTES = ["/more", "/financials", "/analytics", "/export"];
+const MORE_ROUTES = ["/more", "/financials", "/analytics", "/export", "/closing"];
 
 export function TabBar() {
   const pathname = usePathname();

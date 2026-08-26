@@ -2,6 +2,11 @@ import Link from "next/link";
 
 const LINKS = [
   {
+    href: "/closing",
+    label: "Daily closing",
+    description: "Count the drawer, compare to expected cash",
+  },
+  {
     href: "/financials",
     label: "Financials",
     description: "Ingredient buying list, expenses, revenue/spend/profit overview",

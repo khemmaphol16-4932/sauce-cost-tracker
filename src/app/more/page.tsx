@@ -1,24 +1,27 @@
 import Link from "next/link";
 
 const LINKS = [
+  { href: "/sales", label: "ประวัติยอดขาย / รับเงิน", description: "ตรวจรายการขายและเปลี่ยนสถานะการรับเงิน" },
+  { href: "/batches", label: "เตรียมของ / ผลิตเป็นรอบ", description: "บันทึกการเตรียมอาหารและสินค้าพร้อมขาย" },
+  { href: "/dashboard", label: "ภาพรวมร้าน", description: "ดูตัวเลขและกราฟจากระบบเดิม" },
   {
     href: "/closing",
-    label: "Daily closing",
+    label: "ปิดยอดประจำวัน",
     description: "Count the drawer, compare to expected cash",
   },
   {
     href: "/financials",
-    label: "Financials",
+    label: "การเงิน",
     description: "Ingredient buying list, expenses, revenue/spend/profit overview",
   },
   {
     href: "/analytics",
-    label: "Analytics",
+    label: "วิเคราะห์ร้าน / ของเสีย",
     description: "Repeat customers, peak hours, waste logging",
   },
   {
     href: "/export",
-    label: "Export",
+    label: "ส่งออกข้อมูล",
     description: "Download your data as CSV files",
   },
 ] as const;

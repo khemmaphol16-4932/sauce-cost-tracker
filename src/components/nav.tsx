@@ -14,7 +14,7 @@ export function Nav() {
             <BusinessSwitcher />
             <form action={signOut}>
               <button className="text-xs text-text-secondary underline underline-offset-2">
-                Sign out
+                ออกจากระบบ
               </button>
             </form>
           </div>

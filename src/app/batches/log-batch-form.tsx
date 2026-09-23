@@ -2,8 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { logBatch } from "./actions";
-
-const todayISO = () => new Date().toISOString().slice(0, 10);
+import { todayISO } from "@/lib/dates";
 
 type RecipeOption = {
   id: string;

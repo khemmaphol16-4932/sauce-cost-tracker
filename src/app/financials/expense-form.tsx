@@ -3,8 +3,7 @@
 import { useState, useTransition } from "react";
 import { logExpense } from "./actions";
 import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
-
-const todayISO = () => new Date().toISOString().slice(0, 10);
+import { todayISO } from "@/lib/dates";
 
 export function ExpenseForm() {
   const [isPending, startTransition] = useTransition();

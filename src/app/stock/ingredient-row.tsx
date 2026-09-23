@@ -11,8 +11,8 @@ import {
   updateIngredient,
 } from "./actions";
 import type { IngredientWithLastPurchase } from "@/lib/data/ingredients";
+import { todayISO } from "@/lib/dates";
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
 const NEW_BRAND_VALUE = "__new__";
 const COUNT_REASONS = ["recount", "spoiled", "used unrecorded", "other"] as const;
 
@@ -100,12 +100,12 @@ export function IngredientRow({
         <div className="flex items-center gap-2">
           <span className="truncate font-medium text-text">{ingredient.name}</span>
           {isLow && (
-            <span className="shrink-0 rounded-full bg-alert-bg px-2 py-0.5 text-[11px] font-medium text-alert">
+            <span className="shrink-0 rounded-full bg-alert-bg px-2 py-0.5 text-xs font-medium text-alert">
               low
             </span>
           )}
           {ingredient.price_jump_pct != null && (
-            <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-amber-400">
+            <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-400">
               price +{ingredient.price_jump_pct.toFixed(0)}%
             </span>
           )}

@@ -3,10 +3,9 @@
 import { useState, useTransition } from "react";
 import { Modal } from "@/components/modal";
 import { logPurchaseTrip } from "./actions";
+import { todayISO } from "@/lib/dates";
 
 const NEW_BRAND_VALUE = "__new__";
-const todayISO = () => new Date().toISOString().slice(0, 10);
-
 type IngredientOption = { id: string; name: string; unit: string };
 
 type Line = {

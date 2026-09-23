@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { getExportCsvs } from "./actions";
+import { todayISO } from "@/lib/dates";
 
 const UTF8_BOM = "﻿";
 
@@ -35,7 +36,7 @@ export function ExportButtons() {
         finishedGoodsStockCsv,
         expensesCsv,
       } = await getExportCsvs();
-      const date = new Date().toISOString().slice(0, 10);
+      const date = todayISO();
       if (ingredientsCsv) download(`ingredients-${date}.csv`, ingredientsCsv);
       if (purchasesCsv) download(`purchases-${date}.csv`, purchasesCsv);
       if (recipesCsv) download(`recipes-${date}.csv`, recipesCsv);

@@ -5,8 +5,8 @@ import { Modal } from "@/components/modal";
 import { ReasonPills } from "@/components/reason-pills";
 import { adjustFinishedGoods, updateFinishedGoodsThreshold } from "@/app/sales/actions";
 import type { FinishedGoodsRow as FinishedGoodsRowType } from "@/lib/data/finished-goods";
+import { todayISO } from "@/lib/dates";
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
 const COUNT_REASONS = ["recount", "breakage", "sample", "other"] as const;
 
 export function FinishedGoodsRow({ item }: { item: FinishedGoodsRowType }) {
@@ -54,7 +54,7 @@ export function FinishedGoodsRow({ item }: { item: FinishedGoodsRowType }) {
       <button onClick={openModal} className="min-w-0 flex-1 text-left">
         <span className="truncate text-text">{item.recipe_name}</span>
         {isLow && (
-          <span className="ml-2 rounded-full bg-alert-bg px-2 py-0.5 text-[11px] font-medium text-alert">
+          <span className="ml-2 rounded-full bg-alert-bg px-2 py-0.5 text-xs font-medium text-alert">
             low
           </span>
         )}

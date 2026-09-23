@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { logWaste } from "./actions";
+import { todayISO } from "@/lib/dates";
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
 const REASON_OPTIONS = ["spoiled", "burnt", "dropped", "expired", "other"] as const;
 
 export function WasteForm({

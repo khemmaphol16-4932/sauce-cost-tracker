@@ -158,9 +158,12 @@ body {
   .grid-3 { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* Desktop keeps the full sidebar; phone-only bits stay hidden. */
+.phone-only, .phone-only-block { display: none !important; }
+
 /* Phone: this is the primary target, not an afterthought — match the real
-   app's own pattern (fixed bottom tab bar, text labels, no icons) instead of
-   a cramped icon rail eating a fifth of a narrow screen. */
+   app's bottom tab bar: five destinations (Home · Sell · Make · Stock · More),
+   icon + label, 56px tall so it can be hit one-handed. */
 @media (max-width: 640px) {
   .app-shell { display: block; }
 
@@ -172,26 +175,34 @@ body {
     width: 100%;
     height: auto;
     flex-direction: row;
-    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+    padding: 0 4px env(safe-area-inset-bottom);
     z-index: 20;
     border-right: none;
     border-top: 1px solid var(--color-border);
+    background: rgba(18, 18, 18, 0.96);
+    backdrop-filter: blur(8px);
   }
 
-  .sidebar-brand, .sidebar-footer { display: none; }
+  .sidebar-brand, .sidebar-footer, .desktop-only { display: none !important; }
+  .phone-only { display: flex !important; }
+  .phone-only-block { display: grid !important; }
 
   .nav-btn {
     flex-direction: column;
+    justify-content: center;
     gap: 2px;
     flex: 1;
-    padding: 8px 4px;
+    min-height: 56px;
+    padding: 6px 2px;
   }
 
-  .nav-btn .icon { display: none; }
-  .nav-btn span:last-child { display: block; font-size: 10.5px; }
-  .nav-btn.active { background: transparent; color: var(--color-accent); }
+  .nav-btn .icon { display: flex; width: auto; }
+  .nav-btn span:last-child { display: block; font-size: 12px; }
+  .nav-btn.active, .nav-btn.active-phone { background: transparent; color: var(--color-accent); }
+  .nav-btn:hover { background: transparent; }
 
-  .main { padding: 16px 14px calc(76px + env(safe-area-inset-bottom)); }
+  .main { padding: calc(16px + env(safe-area-inset-top)) 16px calc(80px + env(safe-area-inset-bottom)); }
+  body.has-cart .main { padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
 
   .grid-4 { grid-template-columns: repeat(2, 1fr); }
   .grid-3 { grid-template-columns: repeat(2, 1fr); }

@@ -41,45 +41,12 @@ function render_sales() {
     .slice(0, 5);
 
   el.innerHTML = `
-    <div class="section-header"><div><h1>Sales</h1><p>Log sales, deducts bottle stock</p></div></div>
+    <div class="section-header"><div><h1>Sell</h1><p>Tap a bottle to add it — tap again for more</p></div></div>
 
-    ${quickDefaults.length > 0 ? `
-    <div class="card">
-      <p class="card-title">Quick sell</p>
-      <p class="card-sub">Tap a recipe — prefills qty 1 at the last price</p>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        ${quickDefaults.map((q) => `
-          <button class="btn btn-ghost" style="justify-content:space-between;width:100%;padding:12px 14px"
-                  onclick="openQuickSell('${q.recipeId}')">
-            <span>${q.recipeName}</span>
-            <span class="value">${money(q.unitPrice)}</span>
-          </button>
-        `).join("")}
-      </div>
-    </div>` : ""}
+    ${renderSellTiles()}
 
-    <div class="card">
-      <p class="card-title">Quick check</p>
-      <p class="card-sub">How many, how much, who</p>
-      <div class="grid grid-3">
-        <div class="stat"><div class="num">${totalBottles}</div><div class="label">Bottles sold</div></div>
-        <div class="stat"><div class="num">${money(totalRevenue)}</div><div class="label">Revenue (price × qty)</div></div>
-        <div class="stat"><div class="num">${Object.keys(customerCounts).length}</div><div class="label">Named customers</div></div>
-      </div>
-      ${topCustomers.length > 0 ? `
-        <ul class="row-list" style="margin-top:10px">
-          ${topCustomers.map(([name, count]) => `
-            <li class="row-item">
-              <span class="main-text">${name}</span>
-              <span class="value">${count} order${count === 1 ? "" : "s"}</span>
-            </li>
-          `).join("")}
-        </ul>
-      ` : ""}
-    </div>
-
-    <div class="card">
-      <p class="card-title">Log a sale</p>
+    <details class="card custom-sale">
+      <summary class="card-title">Custom sale <span class="card-sub">other date, odd price…</span></summary>
       ${recipes.length === 0 ? '<p class="empty-state">Create a recipe first.</p>' : `
         <div class="field"><label>Recipe</label><select id="f-recipe">${recipeOptions}</select></div>
         <div class="field-row" style="margin-top:8px">
@@ -111,7 +78,28 @@ function render_sales() {
         </div>
         <button class="btn btn-primary" style="margin-top:10px" onclick="submitLogSale()">Log sale</button>
       `}
+    </details>
+
+    <div class="card">
+      <p class="card-title">Quick check</p>
+      <p class="card-sub">How many, how much, who</p>
+      <div class="grid grid-3">
+        <div class="stat"><div class="num">${totalBottles}</div><div class="label">Bottles sold</div></div>
+        <div class="stat"><div class="num">${money(totalRevenue)}</div><div class="label">Revenue (price × qty)</div></div>
+        <div class="stat"><div class="num">${Object.keys(customerCounts).length}</div><div class="label">Named customers</div></div>
+      </div>
+      ${topCustomers.length > 0 ? `
+        <ul class="row-list" style="margin-top:10px">
+          ${topCustomers.map(([name, count]) => `
+            <li class="row-item">
+              <span class="main-text">${name}</span>
+              <span class="value">${count} order${count === 1 ? "" : "s"}</span>
+            </li>
+          `).join("")}
+        </ul>
+      ` : ""}
     </div>
+
 
     <div class="card">
       <p class="card-title">Sales history</p>

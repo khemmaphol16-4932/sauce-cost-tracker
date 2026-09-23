@@ -3,6 +3,7 @@ let currentRecipeId = null;
 function render_recipes() {
   const el = document.getElementById("section-recipes");
   el.innerHTML = `
+    ${makeSwitcher("recipes")}
     <div class="section-header">
       <div><h1>Recipes</h1><p>Cost & margin per recipe</p></div>
       <button class="btn btn-primary btn-sm" onclick="openAddRecipeModal()">+ Recipe</button>

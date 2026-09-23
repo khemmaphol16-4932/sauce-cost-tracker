@@ -12,19 +12,28 @@ function money(n) {
   return "฿" + (Number(n) || 0).toFixed(2);
 }
 
+// Business runs in Thailand — UTC dates put 00:00–07:00 sales on yesterday.
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
 }
 
 // ---- Navigation ----
+const PHONE_TAB_FOR = { recipes: "batches", closing: "more", financials: "more", analytics: "more" };
 function nav(sectionName) {
   document.querySelectorAll(".section").forEach((el) => el.classList.remove("active"));
-  document.querySelectorAll(".nav-btn").forEach((el) => el.classList.remove("active"));
+  document.querySelectorAll(".nav-btn").forEach((el) => el.classList.remove("active", "active-phone"));
 
   const section = document.getElementById("section-" + sectionName);
   const btn = document.querySelector(`.nav-btn[data-section="${sectionName}"]`);
   if (section) section.classList.add("active");
   if (btn) btn.classList.add("active");
+  // Phone bar has 5 tabs: Recipes lives under Make, the rest under More.
+  const phoneTab = PHONE_TAB_FOR[sectionName];
+  if (phoneTab) {
+    const tabBtn = document.querySelector(`.nav-btn[data-section="${phoneTab}"]`);
+    if (tabBtn) tabBtn.classList.add("active-phone");
+  }
+  window.scrollTo(0, 0);
 
   const renderer = window["render_" + sectionName];
   if (typeof renderer === "function") renderer();
@@ -69,7 +78,7 @@ let stockAdjustments = [];
 let cashReconciliations = [];
 
 function saveAll() {
-  localStorage.setItem(
+  try { localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify({
       ingredients,
@@ -82,10 +91,14 @@ function saveAll() {
       cashReconciliations,
     })
   );
+  } catch {
+    // storage blocked (private window) — preview still works for this visit
+  }
 }
 
 function loadAll() {
-  const raw = localStorage.getItem(STORAGE_KEY);
+  let raw = null;
+  try { raw = localStorage.getItem(STORAGE_KEY); } catch { raw = null; }
   if (!raw) {
     seedData();
     saveAll();

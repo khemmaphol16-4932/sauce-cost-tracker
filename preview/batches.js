@@ -3,6 +3,7 @@ function render_batches() {
   const recipeOptions = recipes.map((r) => `<option value="${r.id}">${r.name}</option>`).join("");
 
   el.innerHTML = `
+    ${makeSwitcher("batches")}
     <div class="section-header"><div><h1>Batches</h1><p>Log production, credits bottle stock</p></div></div>
 
     <div class="card">

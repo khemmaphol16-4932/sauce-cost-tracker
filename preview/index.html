@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Ordexa — Offline Preview</title>
   <link rel="stylesheet" href="variables.css">
   <link rel="stylesheet" href="layout.css">
@@ -20,14 +20,15 @@
         </div>
       </div>
 
-      <button class="nav-btn" data-section="dashboard" onclick="nav('dashboard')"><span class="icon">◱</span><span>Dashboard</span></button>
-      <button class="nav-btn" data-section="stock" onclick="nav('stock')"><span class="icon">▤</span><span>Stock</span></button>
-      <button class="nav-btn" data-section="recipes" onclick="nav('recipes')"><span class="icon">✎</span><span>Recipes</span></button>
-      <button class="nav-btn" data-section="batches" onclick="nav('batches')"><span class="icon">⟳</span><span>Batches</span></button>
-      <button class="nav-btn" data-section="sales" onclick="nav('sales')"><span class="icon">฿</span><span>Sales</span></button>
-      <button class="nav-btn" data-section="closing" onclick="nav('closing')"><span class="icon">◧</span><span>Closing</span></button>
-      <button class="nav-btn" data-section="financials" onclick="nav('financials')"><span class="icon">▦</span><span>Financials</span></button>
-      <button class="nav-btn" data-section="analytics" onclick="nav('analytics')"><span class="icon">◈</span><span>Analytics</span></button>
+      <button class="nav-btn" data-section="dashboard" onclick="nav('dashboard')"><span class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg></span><span>Home</span></button>
+      <button class="nav-btn" data-section="sales" onclick="nav('sales')"><span class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h2l2.2 10.2a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L20 8H7"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg></span><span>Sell</span></button>
+      <button class="nav-btn" data-section="batches" onclick="nav('batches')"><span class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h16"/><path d="M5 10v7a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-7"/><path d="M9 6c0-1 1-1.5 1-2.5M13 6c0-1 1-1.5 1-2.5"/></svg></span><span>Make</span></button>
+      <button class="nav-btn" data-section="stock" onclick="nav('stock')"><span class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5 12 3l9 4.5-9 4.5z"/><path d="M3 7.5V16.5L12 21l9-4.5V7.5"/><path d="M12 12v9"/></svg></span><span>Stock</span></button>
+      <button class="nav-btn desktop-only" data-section="recipes" onclick="nav('recipes')"><span class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h16"/><path d="M5 10v7a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-7"/><path d="M9 6c0-1 1-1.5 1-2.5M13 6c0-1 1-1.5 1-2.5"/></svg></span><span>Recipes</span></button>
+      <button class="nav-btn desktop-only" data-section="closing" onclick="nav('closing')"><span class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span><span>Closing</span></button>
+      <button class="nav-btn desktop-only" data-section="financials" onclick="nav('financials')"><span class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span><span>Financials</span></button>
+      <button class="nav-btn desktop-only" data-section="analytics" onclick="nav('analytics')"><span class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span><span>Analytics</span></button>
+      <button class="nav-btn phone-only" data-section="more" onclick="nav('more')"><span class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></span><span>More</span></button>
 
       <div class="sidebar-footer">
         Not the real app.<br>No backend, no sync — data saved to this browser only.
@@ -43,6 +44,7 @@
       <div class="section" id="section-closing"></div>
       <div class="section" id="section-financials"></div>
       <div class="section" id="section-analytics"></div>
+      <div class="section" id="section-more"></div>
     </main>
   </div>
 
@@ -65,6 +67,7 @@
   <script src="recipes.js"></script>
   <script src="batches.js"></script>
   <script src="sales.js"></script>
+  <script src="sell-cart.js"></script>
   <script src="closing.js"></script>
   <script src="financials.js"></script>
   <script src="analytics.js"></script>

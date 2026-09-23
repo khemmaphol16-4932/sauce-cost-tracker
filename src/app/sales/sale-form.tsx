@@ -2,16 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { logSale } from "./actions";
-
-const todayISO = () => new Date().toISOString().slice(0, 10);
-
-const PLATFORM_OPTIONS = [
-  { value: "self", label: "Self-sell", feePct: 0 },
-  { value: "tiktok", label: "TikTok Shop", feePct: 5 },
-  { value: "shopee", label: "Shopee", feePct: 5.42 },
-  { value: "lazada", label: "Lazada", feePct: 6.3 },
-  { value: "other", label: "Other", feePct: 0 },
-] as const;
+import { todayISO } from "@/lib/dates";
+import { PLATFORM_OPTIONS } from "@/lib/platforms";
 
 export function SaleForm({ recipes }: { recipes: { id: string; name: string }[] }) {
   const [platform, setPlatform] = useState<string>(PLATFORM_OPTIONS[0].value);
@@ -56,7 +48,7 @@ export function SaleForm({ recipes }: { recipes: { id: string; name: string }[] 
   };
 
   return (
-    <form onSubmit={submit} className="space-y-4 card">
+    <form onSubmit={submit} className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-text-secondary">Recipe</label>
         <select name="recipe_id" required className="mt-1 w-full field-input">

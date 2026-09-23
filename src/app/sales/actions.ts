@@ -5,6 +5,7 @@ import { getCurrentBusinessId } from "@/lib/data/businesses";
 import { getRecipeDetail } from "@/lib/data/recipes";
 import { calcRecipeCost } from "@/lib/costing";
 import { revalidatePath } from "next/cache";
+import { todayISO } from "@/lib/dates";
 
 type ActionResult = { error: string } | undefined;
 
@@ -70,6 +71,76 @@ export async function logSale(formData: FormData): Promise<ActionResult> {
   revalidatePath("/stock");
   revalidatePath("/dashboard");
 }
+
+type CartLine = { recipe_id: string; qty_bottles: number; price_charged_total: number };
+
+// One checkout from the Sell cart: every line becomes its own `sales` row (the
+// schema is one recipe per row), but they go in as a single INSERT so the
+// per-row stock trigger either deducts all of them or none — no half-logged
+// cart if one recipe is short on bottles.
+export async function logCartSale(formData: FormData): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+
+  let lines: CartLine[];
+  try {
+    lines = JSON.parse(String(formData.get("lines") ?? "[]"));
+  } catch {
+    return { error: "Cart is unreadable — try again" };
+  }
+  lines = lines.filter((l) => l && l.recipe_id);
+  if (lines.length === 0) return { error: "Cart is empty" };
+  for (const l of lines) {
+    if (!(Number(l.qty_bottles) > 0) || !(Number(l.price_charged_total) >= 0)) {
+      return { error: "Valid quantity and price are required" };
+    }
+  }
+
+  const platform = String(formData.get("platform") ?? "self").trim() || "self";
+  const platformFeeRaw = String(formData.get("platform_fee_pct") ?? "").trim();
+  const platformFeePct = platformFeeRaw ? Number(platformFeeRaw) : null;
+  const paymentMethod = String(formData.get("payment_method") ?? "").trim();
+  const customerRef = String(formData.get("customer_ref") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  const details = await Promise.all(lines.map((l) => getRecipeDetail(l.recipe_id)));
+  const businessId = await getCurrentBusinessId();
+  const saleDate = todayISO();
+
+  const rows = [];
+  for (let i = 0; i < lines.length; i++) {
+    const detail = details[i];
+    if (!detail) return { error: "Recipe not found" };
+    const cost = calcRecipeCost(
+      detail.recipe,
+      detail.ingredients.map((x) => ({ qty_used: x.qty_used, avg_price_per_unit: x.avg_price_per_unit })),
+      detail.packaging.map((p) => ({ cost_per_unit: p.cost_per_unit }))
+    );
+    rows.push({
+      user_id: user.id,
+      business_id: businessId,
+      recipe_id: lines[i].recipe_id,
+      qty_bottles: Number(lines[i].qty_bottles),
+      price_charged_total: Number(lines[i].price_charged_total),
+      platform,
+      platform_fee_pct: platformFeePct,
+      payment_status: "paid",
+      payment_method: paymentMethod || null,
+      sale_date: saleDate,
+      cost_per_bottle_snapshot: cost.costPerBottle,
+      customer_ref: customerRef || null,
+      notes: notes || null,
+    });
+  }
+
+  const { error } = await supabase.from("sales").insert(rows);
+  if (error) return { error: error.message };
+
+  revalidatePath("/sales");
+  revalidatePath("/stock");
+  revalidatePath("/dashboard");
+  revalidatePath("/closing");
+}
+
 
 export async function updateSale(formData: FormData): Promise<ActionResult> {
   const { supabase } = await requireUser();

@@ -46,6 +46,8 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// The manifest and app icons must be public: browsers fetch the manifest
+// without cookies, so an auth redirect here silently breaks "Install app".
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|icons).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|manifest.webmanifest|icons|icon|apple-icon).*)"],
 };

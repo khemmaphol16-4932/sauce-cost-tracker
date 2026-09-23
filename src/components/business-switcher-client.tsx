@@ -50,7 +50,7 @@ export function BusinessSwitcherClient({
         value={currentId}
         onChange={onSwitch}
         disabled={isPending}
-        className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs font-medium text-text disabled:opacity-50"
+        className="min-h-11 max-w-[60vw] truncate rounded-lg border border-border bg-surface px-3 text-sm font-medium text-text disabled:opacity-50"
       >
         {businesses.map((b) => (
           <option key={b.id} value={b.id}>

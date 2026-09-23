@@ -128,7 +128,7 @@ export default async function DashboardPage() {
             {data.recentActivity.map((item) => (
               <li key={`${item.kind}-${item.id}`} className="flex items-center gap-3 py-2 text-sm">
                 <span
-                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-xs font-medium ${
                     item.kind === "purchase"
                       ? "bg-accent/15 text-accent"
                       : "bg-success/15 text-success"
@@ -156,7 +156,7 @@ function OverviewStat({ label, value }: { label: string; value: number | string 
   return (
     <div>
       <p className="font-mono text-xl font-bold text-text">{value}</p>
-      <p className="text-[11px] text-text-secondary">{label}</p>
+      <p className="text-xs text-text-secondary">{label}</p>
     </div>
   );
 }

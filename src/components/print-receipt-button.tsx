@@ -28,7 +28,7 @@ export function PrintReceiptButton({ data }: { data: ReceiptData }) {
       >
         {isPending ? "…" : "Print"}
       </button>
-      {error && <p className="text-[11px] text-alert">{error}</p>}
+      {error && <p className="text-xs text-alert">{error}</p>}
     </div>
   );
 }

@@ -21,7 +21,7 @@ export function ExpenseListRow({ expense }: { expense: ExpenseRow }) {
     <li className="flex items-start justify-between gap-2 border-b border-border py-3 last:border-0">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium capitalize text-text-secondary">
+          <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-xs font-medium capitalize text-text-secondary">
             {expense.category}
           </span>
           <span className="font-mono text-text">฿{expense.amount.toFixed(2)}</span>

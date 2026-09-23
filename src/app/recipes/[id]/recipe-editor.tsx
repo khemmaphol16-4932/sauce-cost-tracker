@@ -164,7 +164,7 @@ export function RecipeEditor({
           <Row label="VAT / bottle" value={summary.vatAmount} />
           <Row label="Profit / bottle" value={summary.profitPerBottle} bold />
         </dl>
-        <p className="mt-3 text-[11px] leading-snug text-text-secondary">
+        <p className="mt-3 text-xs leading-snug text-text-secondary">
           Tax note: net profit is taxable personal income if you&apos;re unregistered/no VAT.
           This is informational only, not a tax calculation — consult an accountant for real
           filing guidance.

@@ -53,7 +53,7 @@ export function SaleListRow({ sale, businessName }: { sale: SaleRow; businessNam
           <div className="flex items-center gap-2">
             <span className="truncate font-medium text-text">{sale.recipe_name}</span>
             <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
                 STATUS_STYLES[sale.payment_status] ?? "bg-surface text-text-secondary"
               }`}
             >

@@ -12,7 +12,18 @@ const PLATFORM_OPTIONS = [
 ];
 const PAYMENT_METHODS = ["cash", "transfer", "cod"];
 
+// Stand-in for the real app's Shop & label settings (More → Shop & label).
+const PREVIEW_SHOP = {
+  businessName: "Ordexa Sauce",
+  phone: "081-234-5678",
+  contactLine: "LINE @ordexa",
+  address: null,
+  logoDataUrl: null,
+  footer: "ขอบคุณที่อุดหนุนนะคะ ♥",
+};
+
 let cart = {};
+let pendingLabel = null;
 let checkout = { platform: "self", feePct: 0, paymentMethod: "cash" };
 
 function stockFor(recipeId) {
@@ -159,7 +170,7 @@ function openCheckout(keepInputs) {
       <input id="co-total" type="number" inputmode="decimal" min="0" placeholder="${listTotal.toFixed(0)}" value="${prevTotal}"
              oninput="document.getElementById('co-charge').textContent = 'Charge ฿' + (this.value === '' ? ${listTotal.toFixed(0)} : Number(this.value).toFixed(0))">
     </div>
-    <div class="field"><label>Customer / room (optional)</label>
+    <div class="field"><label>Customer name (printed on the label)</label>
       <input id="co-customer" placeholder="e.g. room 204, Nok" value="${prevCustomer}">
     </div>
 
@@ -201,9 +212,36 @@ function submitCart() {
   const bottles = lines.reduce((s, l) => s + l.qty, 0);
   saveAll();
   cart = {};
-  closeModal();
-  showToast(`Sold ${bottles} bottle${bottles === 1 ? "" : "s"} · ฿${charged.toFixed(0)}`);
   render_sales();
+
+  // Real app: render the label while saving, then one tap → Share Sheet → PeriPage.
+  renderReceiptFile({
+    ...PREVIEW_SHOP,
+    dateLabel: todayISO(),
+    lines: lines.map((l) => ({ name: l.name, qty: l.qty, price: l.lineTotal })),
+    total: charged,
+    customerRef: customer || null,
+  }).then((file) => {
+    pendingLabel = file;
+    const url = URL.createObjectURL(file);
+    openModal("Sold ✓", `
+      <p style="margin:0 0 12px;text-align:center">${bottles} bottle${bottles === 1 ? "" : "s"} · <span class="mono">฿${charged.toFixed(0)}</span>${customer ? " for <strong>" + customer + "</strong>" : ""}</p>
+      <div style="display:flex;justify-content:center;background:var(--color-bg);border-radius:var(--radius-md);padding:12px;margin-bottom:12px">
+        <img src="${url}" alt="Label preview" style="width:100%;max-width:220px;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+      </div>
+      <button class="btn btn-primary co-charge" onclick="printPendingLabel()">Print label</button>
+      <p class="sub-text" style="text-align:center;margin:6px 0 0">Opens the share sheet — choose PeriPage to print.</p>
+      <button class="btn btn-ghost co-charge" style="margin-top:8px" onclick="closeModal()">Done</button>
+    `);
+  }).catch(() => {
+    closeModal();
+    showToast(`Sold ${bottles} bottle${bottles === 1 ? "" : "s"} · ฿${charged.toFixed(0)}`);
+  });
+}
+
+function printPendingLabel() {
+  if (!pendingLabel) return;
+  shareReceiptFile(pendingLabel, PREVIEW_SHOP.businessName).catch(() => showToast("Couldn't open the print sheet", true));
 }
 
 // Re-render the pinned bar whenever Sell renders or the user leaves it.

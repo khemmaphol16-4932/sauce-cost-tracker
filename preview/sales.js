@@ -260,7 +260,7 @@ function printReceipt(id) {
   const r = recipes.find((x) => x.id === s.recipe_id);
 
   shareOrDownloadReceipt({
-    businessName: "Ordexa",
+    ...PREVIEW_SHOP,
     dateLabel: s.sale_date,
     lines: [{ name: r ? r.name : "(deleted recipe)", qty: s.qty_bottles, price: s.price_charged_total }],
     total: s.price_charged_total,

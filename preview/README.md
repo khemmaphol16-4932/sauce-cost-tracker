@@ -22,3 +22,9 @@ repo root (spins up a small PowerShell static server, no Node/npm required,
 since npm has been unreliable on some machines this project uses).
 
 **Resetting data:** the Dashboard tab has a "Reset demo data" button.
+
+**Printer test (`print-test.html`):** open on the shop computer in Chrome or
+Edge to check the PeriPage A6 prints over Bluetooth (Web Serial) before relying
+on the real app's Print station. Uses the same renderer and driver as the app
+(`receipt.js` / `peripage.js` are type-stripped copies of `src/lib/receipt.ts`
+and `src/lib/peripage.ts`).

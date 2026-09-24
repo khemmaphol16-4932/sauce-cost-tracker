@@ -4,7 +4,9 @@
 // PeriPage has no official API and its printers speak a proprietary
 // Bluetooth-Classic protocol that browsers can't reach (Web Bluetooth is
 // BLE-only), so "share an image to the PeriPage app" is the path that works on
-// both iPhone and Android. Falls back to a plain download when the Share
+// both iPhone and Android. (For hands-free printing, the shop computer runs
+// /print-station, which prints this same layout straight to the A6 — see
+// src/lib/peripage.ts.) Falls back to a plain download when the Share
 // Sheet / file sharing isn't available (desktop browsers, older iOS).
 //
 // The layout doubles as a bag label: logo + shop details on top, the
@@ -64,23 +66,32 @@ function loadImage(src) {
   });
 }
 
-async function buildReceiptCanvas(data) {
+/** scale 2 = crisp PNG for the Share Sheet; scale 1 = exactly 384 dots for
+ * direct printing (see src/lib/peripage.ts). */
+async function buildReceiptCanvas(
+  data,
+  scale = SCALE
+){
   const logo = data.logoDataUrl ? await loadImage(data.logoDataUrl) : null;
 
   // Draw onto an oversized canvas, then crop to the height actually used —
   // simpler than pre-measuring every wrapped line.
   const draft = document.createElement("canvas");
-  draft.width = RECEIPT_WIDTH * SCALE;
-  draft.height = 3000 * SCALE;
+  draft.width = RECEIPT_WIDTH * scale;
+  draft.height = 3000 * scale;
   const ctx = draft.getContext("2d");
   if (!ctx) throw new Error("Canvas is not supported on this device");
-  ctx.scale(SCALE, SCALE);
+  ctx.scale(scale, scale);
 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, RECEIPT_WIDTH, 3000);
   ctx.fillStyle = "#000000";
   ctx.strokeStyle = "#000000";
   ctx.textBaseline = "top";
+
+  // At 1:1 (direct printing) thin strokes fall apart once cut to black/white
+  // dots, so every weight goes bold there; the 2x Share Sheet image keeps them.
+  const w = scale === 1 ? "bold " : "";
 
   const contentWidth = RECEIPT_WIDTH - PADDING * 2;
   const center = RECEIPT_WIDTH / 2;
@@ -115,20 +126,20 @@ async function buildReceiptCanvas(data) {
 
   centered(data.businessName, `bold 22px ${FONT}`, 30);
   const contact = [data.phone, data.contactLine].filter(Boolean).join("  ·  ");
-  if (data.address) centered(data.address, `13px ${FONT}`, 20);
-  if (contact) centered(contact, `13px ${FONT}`, 20);
+  if (data.address) centered(data.address, `${w}13px ${FONT}`, 20);
+  if (contact) centered(contact, `${w}13px ${FONT}`, 20);
 
   if (data.customerRef) {
     y += 4;
     divider(true);
-    centered("สำหรับ", `14px ${FONT}`, 22);
+    centered("สำหรับ", `${w}14px ${FONT}`, 22);
     centered(data.customerRef, `bold 30px ${FONT}`, 38);
     y += 2;
   }
 
   divider();
 
-  ctx.font = `15px ${FONT}`;
+  ctx.font = `${w}15px ${FONT}`;
   for (const line of data.lines.length > 0 ? data.lines : [{ name: "—", qty: 0, price: 0 }]) {
     const priceLabel = `฿${line.price.toFixed(2)}`;
     const priceWidth = ctx.measureText(priceLabel).width;
@@ -149,7 +160,7 @@ async function buildReceiptCanvas(data) {
   ctx.fillText(`฿${data.total.toFixed(2)}`, RECEIPT_WIDTH - PADDING, y);
   y += LINE_HEIGHT + 4;
 
-  centered(data.dateLabel, `12px ${FONT}`, 20);
+  centered(data.dateLabel, `${w}12px ${FONT}`, 20);
   if (data.footer) {
     y += 4;
     centered(data.footer, `bold 15px ${FONT}`, 22);
@@ -157,8 +168,8 @@ async function buildReceiptCanvas(data) {
   y += PADDING;
 
   const canvas = document.createElement("canvas");
-  canvas.width = RECEIPT_WIDTH * SCALE;
-  canvas.height = Math.ceil(y * SCALE);
+  canvas.width = RECEIPT_WIDTH * scale;
+  canvas.height = Math.ceil(y * scale);
   const out = canvas.getContext("2d");
   if (!out) throw new Error("Canvas is not supported on this device");
   out.drawImage(draft, 0, 0);

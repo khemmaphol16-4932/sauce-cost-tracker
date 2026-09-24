@@ -3,6 +3,11 @@ import { signOut } from "@/app/stock/actions";
 
 const LINKS = [
   {
+    href: "/settings",
+    label: "Shop & label",
+    description: "Logo, contact info and thank-you message printed on each bag",
+  },
+  {
     href: "/closing",
     label: "Daily closing",
     description: "Count the drawer, compare to expected cash",

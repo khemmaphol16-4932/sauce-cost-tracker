@@ -6,6 +6,7 @@ import { ConfirmModal } from "@/components/confirm-modal";
 import { PrintReceiptButton } from "@/components/print-receipt-button";
 import { deleteSale, updateSale } from "./actions";
 import type { SaleRow } from "@/lib/data/sales";
+import type { ReceiptProfile } from "@/lib/data/receipt-profile";
 
 const STATUS_STYLES: Record<string, string> = {
   paid: "bg-success/20 text-success",
@@ -13,7 +14,7 @@ const STATUS_STYLES: Record<string, string> = {
   refunded: "bg-alert-bg text-alert",
 };
 
-export function SaleListRow({ sale, businessName }: { sale: SaleRow; businessName: string }) {
+export function SaleListRow({ sale, profile }: { sale: SaleRow; profile: ReceiptProfile }) {
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -39,7 +40,7 @@ export function SaleListRow({ sale, businessName }: { sale: SaleRow; businessNam
   };
 
   const receiptData = {
-    businessName,
+    ...profile,
     dateLabel: sale.sale_date,
     lines: [{ name: sale.recipe_name, qty: sale.qty_bottles, price: sale.price_charged_total }],
     total: sale.price_charged_total,

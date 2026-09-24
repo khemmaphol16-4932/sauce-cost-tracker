@@ -1,13 +1,20 @@
-// Renders a thermal-receipt-shaped PNG client-side and hands it to iOS's
-// Share Sheet (no Web Bluetooth on iPhone Safari, so "print to PeriPage" here
-// means "generate an image, let the operator pick the PeriPage app to print
-// it"). Falls back to a plain download when the Share Sheet / File sharing
-// isn't available (desktop browsers, older iOS).
+// Renders a thermal-receipt-shaped PNG client-side and hands it to the
+// phone's Share Sheet, where the operator picks the PeriPage app to print it.
+// PeriPage has no official API and its printers speak a proprietary
+// Bluetooth-Classic protocol that browsers can't reach (Web Bluetooth is
+// BLE-only), so "share an image to the PeriPage app" is the path that works on
+// both iPhone and Android. Falls back to a plain download when the Share
+// Sheet / file sharing isn't available (desktop browsers, older iOS).
+//
+// The layout doubles as a bag label: logo + shop details on top, the
+// customer's name large in the middle so the bag reads as made for them.
 
 const RECEIPT_WIDTH = 384; // logical px, matches a 58mm thermal printer
 const SCALE = 2; // render at 2x for a crisper print
 const PADDING = 20;
 const LINE_HEIGHT = 26;
+const MAX_LOGO_HEIGHT = 140;
+const FONT = '"Sarabun", "Noto Sans Thai", "Leelawadee UI", Tahoma, sans-serif';
 
 export type ReceiptLine = { name: string; qty: number; price: number };
 
@@ -17,6 +24,11 @@ export type ReceiptData = {
   lines: ReceiptLine[];
   total: number;
   customerRef?: string | null;
+  logoDataUrl?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  contactLine?: string | null;
+  footer?: string | null;
 };
 
 // navigator.canShare/share aren't universally in lib.dom's Navigator yet —
@@ -35,51 +47,106 @@ function truncate(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return result + "…";
 }
 
-function buildReceiptCanvas(data: ReceiptData): HTMLCanvasElement {
-  const rowCount = Math.max(data.lines.length, 1);
-  const height =
-    PADDING * 2 +
-    LINE_HEIGHT * 2 + // business name + date
-    16 + // divider
-    LINE_HEIGHT * rowCount +
-    16 + // divider
-    LINE_HEIGHT + // total
-    (data.customerRef ? LINE_HEIGHT : 0);
+// Wraps on spaces where possible, otherwise per character (Thai has no spaces
+// between words, so a long Thai line would never break on spaces alone).
+function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const out: string[] = [];
+  for (const paragraph of text.split(/\r?\n/)) {
+    let line = "";
+    for (const ch of Array.from(paragraph)) {
+      const next = line + ch;
+      if (ctx.measureText(next).width > maxWidth && line) {
+        const lastSpace = line.lastIndexOf(" ");
+        if (lastSpace > 0) {
+          out.push(line.slice(0, lastSpace));
+          line = line.slice(lastSpace + 1) + ch;
+        } else {
+          out.push(line);
+          line = ch;
+        }
+      } else {
+        line = next;
+      }
+    }
+    out.push(line);
+  }
+  return out;
+}
 
-  const canvas = document.createElement("canvas");
-  canvas.width = RECEIPT_WIDTH * SCALE;
-  canvas.height = height * SCALE;
-  const ctx = canvas.getContext("2d");
+function loadImage(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null); // a broken logo shouldn't block printing
+    img.src = src;
+  });
+}
+
+async function buildReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement> {
+  const logo = data.logoDataUrl ? await loadImage(data.logoDataUrl) : null;
+
+  // Draw onto an oversized canvas, then crop to the height actually used —
+  // simpler than pre-measuring every wrapped line.
+  const draft = document.createElement("canvas");
+  draft.width = RECEIPT_WIDTH * SCALE;
+  draft.height = 3000 * SCALE;
+  const ctx = draft.getContext("2d");
   if (!ctx) throw new Error("Canvas is not supported on this device");
   ctx.scale(SCALE, SCALE);
 
   ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, RECEIPT_WIDTH, height);
+  ctx.fillRect(0, 0, RECEIPT_WIDTH, 3000);
   ctx.fillStyle = "#000000";
+  ctx.strokeStyle = "#000000";
   ctx.textBaseline = "top";
 
   const contentWidth = RECEIPT_WIDTH - PADDING * 2;
+  const center = RECEIPT_WIDTH / 2;
   let y = PADDING;
 
-  ctx.font = "bold 20px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText(truncate(ctx, data.businessName, contentWidth), RECEIPT_WIDTH / 2, y);
-  y += LINE_HEIGHT;
+  const centered = (text: string, font: string, lineHeight = LINE_HEIGHT) => {
+    ctx.font = font;
+    ctx.textAlign = "center";
+    for (const line of wrap(ctx, text, contentWidth)) {
+      ctx.fillText(line, center, y);
+      y += lineHeight;
+    }
+  };
 
-  ctx.font = "13px sans-serif";
-  ctx.fillText(data.dateLabel, RECEIPT_WIDTH / 2, y);
-  y += LINE_HEIGHT;
-
-  const divider = () => {
+  const divider = (dashed = false) => {
+    ctx.setLineDash(dashed ? [6, 4] : []);
     ctx.beginPath();
     ctx.moveTo(PADDING, y + 6);
     ctx.lineTo(RECEIPT_WIDTH - PADDING, y + 6);
     ctx.stroke();
+    ctx.setLineDash([]);
     y += 16;
   };
+
+  if (logo) {
+    const ratio = Math.min(contentWidth / logo.width, MAX_LOGO_HEIGHT / logo.height, 1);
+    const w = logo.width * ratio;
+    const h = logo.height * ratio;
+    ctx.drawImage(logo, center - w / 2, y, w, h);
+    y += h + 10;
+  }
+
+  centered(data.businessName, `bold 22px ${FONT}`, 30);
+  const contact = [data.phone, data.contactLine].filter(Boolean).join("  ·  ");
+  if (data.address) centered(data.address, `13px ${FONT}`, 20);
+  if (contact) centered(contact, `13px ${FONT}`, 20);
+
+  if (data.customerRef) {
+    y += 4;
+    divider(true);
+    centered("สำหรับ", `14px ${FONT}`, 22);
+    centered(data.customerRef, `bold 30px ${FONT}`, 38);
+    y += 2;
+  }
+
   divider();
 
-  ctx.font = "14px sans-serif";
+  ctx.font = `15px ${FONT}`;
   for (const line of data.lines.length > 0 ? data.lines : [{ name: "—", qty: 0, price: 0 }]) {
     const priceLabel = `฿${line.price.toFixed(2)}`;
     const priceWidth = ctx.measureText(priceLabel).width;
@@ -93,19 +160,26 @@ function buildReceiptCanvas(data: ReceiptData): HTMLCanvasElement {
 
   divider();
 
-  ctx.font = "bold 16px sans-serif";
+  ctx.font = `bold 17px ${FONT}`;
   ctx.textAlign = "left";
-  ctx.fillText("Total", PADDING, y);
+  ctx.fillText("รวม / Total", PADDING, y);
   ctx.textAlign = "right";
   ctx.fillText(`฿${data.total.toFixed(2)}`, RECEIPT_WIDTH - PADDING, y);
-  y += LINE_HEIGHT;
+  y += LINE_HEIGHT + 4;
 
-  if (data.customerRef) {
-    ctx.font = "13px sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(truncate(ctx, data.customerRef, contentWidth), PADDING, y);
+  centered(data.dateLabel, `12px ${FONT}`, 20);
+  if (data.footer) {
+    y += 4;
+    centered(data.footer, `bold 15px ${FONT}`, 22);
   }
+  y += PADDING;
 
+  const canvas = document.createElement("canvas");
+  canvas.width = RECEIPT_WIDTH * SCALE;
+  canvas.height = Math.ceil(y * SCALE);
+  const out = canvas.getContext("2d");
+  if (!out) throw new Error("Canvas is not supported on this device");
+  out.drawImage(draft, 0, 0);
   return canvas;
 }
 
@@ -118,16 +192,20 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
-export async function shareOrDownloadReceipt(data: ReceiptData): Promise<void> {
-  const canvas = buildReceiptCanvas(data);
+/** Render ahead of time so a later tap can share it without an await first
+ * (iOS only opens the Share Sheet directly inside the tap). */
+export async function renderReceiptFile(data: ReceiptData): Promise<File> {
+  const canvas = await buildReceiptCanvas(data);
   const blob = await canvasToBlob(canvas);
-  const filename = `receipt-${data.dateLabel.replace(/[^0-9a-zA-Z-]/g, "")}.png`;
-  const file = new File([blob], filename, { type: "image/png" });
+  const safeName = (data.customerRef || data.dateLabel).replace(/[^0-9a-zA-Z฀-๿-]/g, "");
+  return new File([blob], `receipt-${safeName || "sale"}.png`, { type: "image/png" });
+}
 
+export async function shareReceiptFile(file: File, title: string): Promise<void> {
   const nav = navigator as ShareableNavigator;
   if (nav.canShare?.({ files: [file] }) && nav.share) {
     try {
-      await nav.share({ files: [file], title: data.businessName });
+      await nav.share({ files: [file], title });
       return;
     } catch (err) {
       // The operator cancelling the Share Sheet rejects with AbortError —
@@ -136,12 +214,17 @@ export async function shareOrDownloadReceipt(data: ReceiptData): Promise<void> {
     }
   }
 
-  const url = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(file);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
+  a.download = file.name;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+export async function shareOrDownloadReceipt(data: ReceiptData): Promise<void> {
+  const file = await renderReceiptFile(data);
+  await shareReceiptFile(file, data.businessName);
 }

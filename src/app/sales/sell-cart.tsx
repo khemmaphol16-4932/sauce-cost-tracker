@@ -5,6 +5,9 @@ import { Modal } from "@/components/modal";
 import { logCartSale } from "./actions";
 import { PAYMENT_METHODS, PLATFORM_OPTIONS } from "@/lib/platforms";
 import type { QuickSellDefaults } from "@/lib/data/sales";
+import type { ReceiptProfile } from "@/lib/data/receipt-profile";
+import { renderReceiptFile, shareReceiptFile } from "@/lib/receipt";
+import { todayISO } from "@/lib/dates";
 
 export type SellTile = QuickSellDefaults & { inStock: number | null };
 
@@ -13,14 +16,20 @@ const LAST_PLATFORM_KEY = "ordexa_last_platform";
 // Tap a tile = +1 bottle. A bar pinned above the tab bar shows the running
 // total; Checkout opens one sheet for platform, payment, and an optional
 // adjusted total. A common sale is two taps instead of tile → qty → submit.
-export function SellCart({ tiles }: { tiles: SellTile[] }) {
+// After a sale the sheet switches to a "Print label" step: the receipt image
+// is rendered while the sale saves, so the tap that prints can open the Share
+// Sheet (→ PeriPage app) immediately — iOS refuses it after an await.
+type Printable = { file: File; customer: string; bottles: number; total: number };
+
+export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: ReceiptProfile }) {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [platform, setPlatform] = useState<string>("self");
   const [feePct, setFeePct] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<string>("cash");
   const [totalOverride, setTotalOverride] = useState<string>("");
-  const [showExtra, setShowExtra] = useState(false);
+  const [showExtra, setShowExtra] = useState(profile.printAfterSale);
+  const [printable, setPrintable] = useState<Printable | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -87,8 +96,20 @@ export function SellCart({ tiles }: { tiles: SellTile[] }) {
   const clearCart = () => {
     setCart({});
     setTotalOverride("");
-    setShowExtra(false);
+    setShowExtra(profile.printAfterSale);
     setError(null);
+  };
+
+  const closeCheckout = () => {
+    setCheckoutOpen(false);
+    setPrintable(null);
+  };
+
+  const printLabel = () => {
+    if (!printable) return;
+    shareReceiptFile(printable.file, profile.businessName).catch(() =>
+      setError("Couldn't open the print sheet — use Print in Sales history instead")
+    );
   };
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -118,6 +139,21 @@ export function SellCart({ tiles }: { tiles: SellTile[] }) {
     formData.set("platform_fee_pct", String(feePct));
     formData.set("payment_method", paymentMethod);
 
+    const customer = String(formData.get("customer_ref") ?? "").trim();
+    const receiptPromise = profile.printAfterSale
+      ? renderReceiptFile({
+          ...profile,
+          dateLabel: todayISO(),
+          lines: payload.map((p, i) => ({
+            name: lines[i].tile.recipeName,
+            qty: p.qty_bottles,
+            price: p.price_charged_total,
+          })),
+          total: chargedTotal,
+          customerRef: customer || null,
+        }).catch(() => null)
+      : Promise.resolve(null);
+
     setError(null);
     startTransition(async () => {
       const result = await logCartSale(formData);
@@ -130,8 +166,13 @@ export function SellCart({ tiles }: { tiles: SellTile[] }) {
       } catch {
         // ignore
       }
-      setToast(`Sold ${bottleCount} bottle${bottleCount === 1 ? "" : "s"} · ฿${chargedTotal.toFixed(0)}`);
-      setCheckoutOpen(false);
+      const file = await receiptPromise;
+      if (file) {
+        setPrintable({ file, customer, bottles: bottleCount, total: chargedTotal });
+      } else {
+        setToast(`Sold ${bottleCount} bottle${bottleCount === 1 ? "" : "s"} · ฿${chargedTotal.toFixed(0)}`);
+        setCheckoutOpen(false);
+      }
       clearCart();
     });
   };
@@ -205,7 +246,39 @@ export function SellCart({ tiles }: { tiles: SellTile[] }) {
         </div>
       )}
 
-      <Modal open={checkoutOpen} onClose={() => setCheckoutOpen(false)} title="Checkout">
+      <Modal
+        open={checkoutOpen}
+        onClose={closeCheckout}
+        title={printable ? "Sold ✓" : "Checkout"}
+      >
+        {printable ? (
+          <div className="space-y-4">
+            <p className="text-center text-base text-text">
+              {printable.bottles} bottle{printable.bottles === 1 ? "" : "s"} ·{" "}
+              <span className="font-mono">฿{printable.total.toFixed(0)}</span>
+              {printable.customer && (
+                <>
+                  {" "}
+                  for <span className="font-semibold">{printable.customer}</span>
+                </>
+              )}
+            </p>
+            <button type="button" onClick={printLabel} className="min-h-14 w-full btn-primary">
+              Print label
+            </button>
+            <p className="text-center text-xs text-text-secondary">
+              Opens the share sheet — choose PeriPage to print.
+            </p>
+            {error && <p className="text-sm text-alert">{error}</p>}
+            <button
+              type="button"
+              onClick={closeCheckout}
+              className="min-h-12 w-full rounded-xl border border-border text-base font-medium text-text"
+            >
+              Done
+            </button>
+          </div>
+        ) : (
         <form onSubmit={submit} className="space-y-5">
           <ul className="divide-y divide-border rounded-xl border border-border bg-bg px-3">
             {lines.map((l) => (
@@ -286,9 +359,9 @@ export function SellCart({ tiles }: { tiles: SellTile[] }) {
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-text-secondary">
-                  Customer / room (optional)
+                  Customer name {profile.printAfterSale ? "(printed on the label)" : "/ room (optional)"}
                 </label>
-                <input name="customer_ref" className="mt-1 field-input" />
+                <input name="customer_ref" autoComplete="off" className="mt-1 field-input" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-text-secondary">Notes (optional)</label>
@@ -310,6 +383,7 @@ export function SellCart({ tiles }: { tiles: SellTile[] }) {
             {isPending ? "Saving…" : `Charge ฿${(chargedTotal || 0).toFixed(0)}`}
           </button>
         </form>
+        )}
       </Modal>
 
       {toast && (

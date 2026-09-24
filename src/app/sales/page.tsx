@@ -1,20 +1,19 @@
 import { getRecipes } from "@/lib/data/recipes";
 import { getSales, getQuickSellDefaults } from "@/lib/data/sales";
-import { getCurrentBusiness } from "@/lib/data/businesses";
+import { getReceiptProfile } from "@/lib/data/receipt-profile";
 import { getFinishedGoodsStock } from "@/lib/data/finished-goods";
 import { SellCart } from "./sell-cart";
 import { SaleForm } from "./sale-form";
 import { SaleListRow } from "./sale-list";
 
 export default async function SalesPage() {
-  const [recipes, sales, quickSellDefaults, business, finishedGoods] = await Promise.all([
+  const [recipes, sales, quickSellDefaults, profile, finishedGoods] = await Promise.all([
     getRecipes(),
     getSales(),
     getQuickSellDefaults(),
-    getCurrentBusiness(),
+    getReceiptProfile(),
     getFinishedGoodsStock(),
   ]);
-  const businessName = business?.name ?? "Ordexa";
   const stockByRecipe = new Map(finishedGoods.map((fg) => [fg.recipe_id, fg.qty_on_hand]));
   // No finished_goods_stock row yet reads as 0 — the sale trigger rejects
   // those too, so the tile shows "Out" rather than failing at checkout.
@@ -25,7 +24,7 @@ export default async function SalesPage() {
 
   return (
     <div className="space-y-4">
-      <SellCart tiles={tiles} />
+      <SellCart tiles={tiles} profile={profile} />
 
       {recipes.length > 0 && (
         <details className="card group">
@@ -50,7 +49,7 @@ export default async function SalesPage() {
         ) : (
           <ul className="rounded-2xl border border-border bg-surface px-4 shadow-sm">
             {sales.map((s) => (
-              <SaleListRow key={s.id} sale={s} businessName={businessName} />
+              <SaleListRow key={s.id} sale={s} profile={profile} />
             ))}
           </ul>
         )}

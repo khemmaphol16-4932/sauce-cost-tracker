@@ -15,7 +15,7 @@ const TABS = [
     href: "/more",
     label: "More",
     icon: "more",
-    match: ["/more", "/financials", "/analytics", "/export", "/closing", "/settings"],
+    match: ["/more", "/financials", "/analytics", "/export", "/closing", "/settings", "/print-station"],
   },
 ] as const;
 

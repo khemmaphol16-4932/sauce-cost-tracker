@@ -9,11 +9,16 @@ export type ReceiptProfile = {
   contactLine: string | null;
   footer: string | null;
   printAfterSale: boolean;
+  // 'phone' = Share Sheet → PeriPage app; 'station' = queued for the shop computer.
+  printTarget: PrintTarget;
 };
+
+export type PrintTarget = "phone" | "station";
 
 // Read separately from getBusinesses() (which only needs id + name and runs
 // on every page) so the logo's few KB aren't fetched on every request.
-// Falls back to name-only if migration 0020 hasn't been applied yet.
+// Falls back to name-only if migration 0020 hasn't been applied yet, and to
+// the phone print path if 0021 hasn't.
 export async function getReceiptProfile(): Promise<ReceiptProfile> {
   const supabase = await createClient();
   const businessId = await getCurrentBusinessId();
@@ -38,8 +43,15 @@ export async function getReceiptProfile(): Promise<ReceiptProfile> {
       contactLine: null,
       footer: null,
       printAfterSale: true,
+      printTarget: "phone",
     };
   }
+
+  const { data: target } = await supabase
+    .from("businesses")
+    .select("print_target")
+    .eq("id", businessId)
+    .maybeSingle();
 
   return {
     businessName: data.name,
@@ -49,5 +61,6 @@ export async function getReceiptProfile(): Promise<ReceiptProfile> {
     contactLine: data.contact_line,
     footer: data.receipt_footer,
     printAfterSale: data.print_after_sale ?? true,
+    printTarget: target?.print_target === "station" ? "station" : "phone",
   };
 }

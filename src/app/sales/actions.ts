@@ -6,6 +6,8 @@ import { getRecipeDetail } from "@/lib/data/recipes";
 import { calcRecipeCost } from "@/lib/costing";
 import { revalidatePath } from "next/cache";
 import { todayISO } from "@/lib/dates";
+import { getReceiptProfile } from "@/lib/data/receipt-profile";
+import type { PrintJobPayload } from "@/lib/print-jobs";
 
 type ActionResult = { error: string } | undefined;
 
@@ -74,11 +76,14 @@ export async function logSale(formData: FormData): Promise<ActionResult> {
 
 type CartLine = { recipe_id: string; qty_bottles: number; price_charged_total: number };
 
+// `queued` = a label job went to the shop computer's print station.
+type CartResult = { error?: string; queued?: boolean } | undefined;
+
 // One checkout from the Sell cart: every line becomes its own `sales` row (the
 // schema is one recipe per row), but they go in as a single INSERT so the
 // per-row stock trigger either deducts all of them or none — no half-logged
 // cart if one recipe is short on bottles.
-export async function logCartSale(formData: FormData): Promise<ActionResult> {
+export async function logCartSale(formData: FormData): Promise<CartResult> {
   const { supabase, user } = await requireUser();
 
   let lines: CartLine[];
@@ -139,6 +144,28 @@ export async function logCartSale(formData: FormData): Promise<ActionResult> {
   revalidatePath("/stock");
   revalidatePath("/dashboard");
   revalidatePath("/closing");
+
+  // Station mode: queue the bag label for the shop computer. The sale is
+  // already saved, so a queue failure is reported as "not queued", never as
+  // a failed sale — the phone then offers its own Print label fallback.
+  const profile = await getReceiptProfile();
+  if (profile.printAfterSale && profile.printTarget === "station") {
+    const payload: PrintJobPayload = {
+      dateLabel: saleDate,
+      lines: rows.map((r, i) => ({
+        name: details[i]!.recipe.name,
+        qty: r.qty_bottles,
+        price: r.price_charged_total,
+      })),
+      total: rows.reduce((sum, r) => sum + r.price_charged_total, 0),
+      customerRef: customerRef || null,
+    };
+    const { error: jobError } = await supabase
+      .from("print_jobs")
+      .insert({ user_id: user.id, business_id: businessId, payload });
+    return { queued: !jobError };
+  }
+  return {};
 }
 
 

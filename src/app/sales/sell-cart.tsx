@@ -8,6 +8,8 @@ import type { QuickSellDefaults } from "@/lib/data/sales";
 import type { ReceiptProfile } from "@/lib/data/receipt-profile";
 import { renderReceiptFile, shareReceiptFile } from "@/lib/receipt";
 import { todayISO } from "@/lib/dates";
+import { queuePrintJob } from "@/app/print-station/actions";
+import type { PrintJobPayload } from "@/lib/print-jobs";
 
 export type SellTile = QuickSellDefaults & { inStock: number | null };
 
@@ -19,7 +21,16 @@ const LAST_PLATFORM_KEY = "ordexa_last_platform";
 // After a sale the sheet switches to a "Print label" step: the receipt image
 // is rendered while the sale saves, so the tap that prints can open the Share
 // Sheet (→ PeriPage app) immediately — iOS refuses it after an await.
-type Printable = { file: File; customer: string; bottles: number; total: number };
+// In station mode the label was already queued for the shop computer by
+// logCartSale; the phone just confirms, with reprint / print-here fallbacks.
+type Printable = {
+  file: File | null;
+  payload: PrintJobPayload;
+  queued: boolean;
+  customer: string;
+  bottles: number;
+  total: number;
+};
 
 export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: ReceiptProfile }) {
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -106,10 +117,20 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
   };
 
   const printLabel = () => {
-    if (!printable) return;
+    if (!printable?.file) return;
     shareReceiptFile(printable.file, profile.businessName).catch(() =>
       setError("Couldn't open the print sheet — use Print in Sales history instead")
     );
+  };
+
+  const printAgainAtStation = () => {
+    if (!printable) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await queuePrintJob(printable.payload);
+      if (result?.error) setError(result.error);
+      else setToast("Sent to the shop printer again");
+    });
   };
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -140,18 +161,18 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
     formData.set("payment_method", paymentMethod);
 
     const customer = String(formData.get("customer_ref") ?? "").trim();
+    const labelPayload: PrintJobPayload = {
+      dateLabel: todayISO(),
+      lines: payload.map((p, i) => ({
+        name: lines[i].tile.recipeName,
+        qty: p.qty_bottles,
+        price: p.price_charged_total,
+      })),
+      total: chargedTotal,
+      customerRef: customer || null,
+    };
     const receiptPromise = profile.printAfterSale
-      ? renderReceiptFile({
-          ...profile,
-          dateLabel: todayISO(),
-          lines: payload.map((p, i) => ({
-            name: lines[i].tile.recipeName,
-            qty: p.qty_bottles,
-            price: p.price_charged_total,
-          })),
-          total: chargedTotal,
-          customerRef: customer || null,
-        }).catch(() => null)
+      ? renderReceiptFile({ ...profile, ...labelPayload }).catch(() => null)
       : Promise.resolve(null);
 
     setError(null);
@@ -167,8 +188,16 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
         // ignore
       }
       const file = await receiptPromise;
-      if (file) {
-        setPrintable({ file, customer, bottles: bottleCount, total: chargedTotal });
+      const queued = !!result?.queued;
+      if (file || queued) {
+        setPrintable({
+          file,
+          payload: labelPayload,
+          queued,
+          customer,
+          bottles: bottleCount,
+          total: chargedTotal,
+        });
       } else {
         setToast(`Sold ${bottleCount} bottle${bottleCount === 1 ? "" : "s"} · ฿${chargedTotal.toFixed(0)}`);
         setCheckoutOpen(false);
@@ -263,12 +292,45 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
                 </>
               )}
             </p>
-            <button type="button" onClick={printLabel} className="min-h-14 w-full btn-primary">
-              Print label
-            </button>
-            <p className="text-center text-xs text-text-secondary">
-              Opens the share sheet — choose PeriPage to print.
-            </p>
+            {printable.queued ? (
+              <>
+                <p className="rounded-xl border border-success/40 bg-success/10 px-4 py-3 text-center text-sm font-medium text-success">
+                  Label sent to the shop printer
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={printAgainAtStation}
+                    disabled={isPending}
+                    className="min-h-12 rounded-xl border border-border text-sm font-medium text-text"
+                  >
+                    Print again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={printLabel}
+                    disabled={!printable.file}
+                    className="min-h-12 rounded-xl border border-border text-sm font-medium text-text disabled:opacity-40"
+                  >
+                    Print from phone
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {profile.printTarget === "station" && (
+                  <p className="text-center text-sm text-alert">
+                    Couldn&apos;t reach the shop printer queue — print from this phone instead.
+                  </p>
+                )}
+                <button type="button" onClick={printLabel} className="min-h-14 w-full btn-primary">
+                  Print label
+                </button>
+                <p className="text-center text-xs text-text-secondary">
+                  Opens the share sheet — choose PeriPage to print.
+                </p>
+              </>
+            )}
             {error && <p className="text-sm text-alert">{error}</p>}
             <button
               type="button"

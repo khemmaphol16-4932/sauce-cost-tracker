@@ -70,7 +70,7 @@ export function SaleListRow({ sale, profile }: { sale: SaleRow; profile: Receipt
           {sale.notes && <p className="mt-1 text-sm text-text-secondary">{sale.notes}</p>}
         </button>
         <div className="flex shrink-0 flex-col items-end gap-1">
-          <PrintReceiptButton data={receiptData} />
+          <PrintReceiptButton data={receiptData} station={profile.printTarget === "station"} />
           <button
             onClick={() => setConfirmOpen(true)}
             disabled={isPending}

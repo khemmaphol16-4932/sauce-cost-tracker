@@ -5,6 +5,7 @@ import { updateShopProfile } from "./actions";
 import { renderReceiptFile, shareReceiptFile, type ReceiptData } from "@/lib/receipt";
 import type { ReceiptProfile } from "@/lib/data/receipt-profile";
 import { todayISO } from "@/lib/dates";
+import { ditherToBlackAndWhite } from "@/lib/peripage";
 
 const LOGO_MAX_WIDTH = 384; // 58mm thermal print width in dots
 
@@ -28,6 +29,9 @@ function resizeLogo(file: File): Promise<string> {
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        // Thermal heads print only black or white: convert once here so the
+        // preview shows the real result and printing needs no dithering.
+        ditherToBlackAndWhite(canvas);
         resolve(canvas.toDataURL("image/png"));
       };
       img.src = String(reader.result);
@@ -46,6 +50,7 @@ export function ShopProfileForm({ profile }: { profile: ReceiptProfile }) {
   });
   const [logo, setLogo] = useState<string>(profile.logoDataUrl ?? "");
   const [printAfterSale, setPrintAfterSale] = useState(profile.printAfterSale);
+  const [printTarget, setPrintTarget] = useState(profile.printTarget);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -150,7 +155,7 @@ export function ShopProfileForm({ profile }: { profile: ReceiptProfile }) {
             )}
           </div>
           <p className="mt-1.5 text-xs text-text-secondary">
-            Black-and-white logos print best on thermal paper.
+            Converted to black-and-white dots, the way the thermal printer prints it.
           </p>
         </div>
 
@@ -199,6 +204,45 @@ export function ShopProfileForm({ profile }: { profile: ReceiptProfile }) {
             className="h-6 w-6 shrink-0 accent-[var(--color-accent)]"
           />
         </label>
+
+        <fieldset>
+          <legend className="text-sm font-medium text-text">Print on</legend>
+          <div className="mt-2 space-y-2">
+            {(
+              [
+                ["phone", "This phone", "Tap Print label → choose the PeriPage app."],
+                [
+                  "station",
+                  "Shop computer (automatic)",
+                  "Labels print by themselves on the computer running More → Print station.",
+                ],
+              ] as const
+            ).map(([value, label, hint]) => (
+              <label
+                key={value}
+                className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border p-3 ${
+                  printTarget === value ? "border-accent bg-accent/10" : "border-border"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="print_target"
+                  value={value}
+                  checked={printTarget === value}
+                  onChange={() => {
+                    setSaved(false);
+                    setPrintTarget(value);
+                  }}
+                  className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-accent)]"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-text">{label}</span>
+                  <span className="block text-xs text-text-secondary">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
       </div>
 
       <div className="card">

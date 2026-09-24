@@ -44,5 +44,15 @@ export async function updateShopProfile(formData: FormData): Promise<ActionResul
     return { error: error.message };
   }
 
+  // Separate update so shops that ran 0020 but not 0021 can still save the rest.
+  const printTarget = formData.get("print_target") === "station" ? "station" : "phone";
+  const { error: targetError } = await supabase
+    .from("businesses")
+    .update({ print_target: printTarget })
+    .eq("id", businessId);
+  if (targetError && printTarget === "station") {
+    return { error: "Saved, but printing on the shop computer needs database update 0021 — run it in Supabase first" };
+  }
+
   revalidatePath("/", "layout");
 }

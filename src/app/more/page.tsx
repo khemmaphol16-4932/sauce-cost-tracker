@@ -8,6 +8,11 @@ const LINKS = [
     description: "Logo, contact info and thank-you message printed on each bag",
   },
   {
+    href: "/print-station",
+    label: "Print station",
+    description: "Open on the shop computer to print bag labels automatically",
+  },
+  {
     href: "/closing",
     label: "Daily closing",
     description: "Count the drawer, compare to expected cash",

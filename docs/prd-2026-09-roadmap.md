@@ -1,269 +1,336 @@
-# Ordexa — Product Requirements & Roadmap (v2, for plan review)
+# Ordexa — Consolidated PRD, Technical Proposal & Plan Review (v3)
 
-**Date:** 2026-09-24 · **Version:** v2 (supersedes v1 in `64a78f6`)
-**Status:** Proposed — *changes required before approving production use* (reviewer verdict on v1, accepted).
-**Repo for review:** `D:\Claude-Phol\Claude_Code\sauce-cost-tracker`, branch `master`, **3 commits ahead of `origin/master`, not pushed**: `35f3156`, `8f5d47b`, `64a78f6` (+ this v2 commit). Review with `git log origin/master..master` and `git diff origin/master..master`.
-**Inputs merged into v2:** (1) v1 of this PRD, (2) the owner-supplied requirements brief ("Evaluate Sauce Cost Tracker and create a PRD…"), (3) the reviewer's comments on v1. Decisions on each are logged in §11.
-**Companion:** `docs/audit-2026-08.md` (F-numbers below).
+**Date:** 2026-09-24 · **Version:** v3 — single source of truth; supersedes the separate requirements brief and PRD v1 (`64a78f6`) / v2 (`9700628`).
+**Status:** Proposed — *changes required before approving production use.*
+**Scope of this revision:** documentation only. No code changed, nothing pushed, no migration run, production untouched.
 
----
-
-## 0. Instructions for the reviewing agent
-
-Planning/review only: **do not modify code, production data, or push/deploy.**
-
-1. Read `AGENTS.md` and `docs/audit-2026-08.md`.
-2. Verify every current-state claim against code (file:line) and, where you have read-only access, against the production schema. Mark each *confirmed / refuted / unverifiable*.
-3. Separate **confirmed defects** from **assumptions** and **proposals**.
-4. Constraints: `npm ci` fails on the owner's Windows machine (registry `ECONNRESET`), so the only build check is GitHub Actions `next build` on push/PR to `master` (`.github/workflows/build.yml`). No test runner exists. Next.js 16 — consult `node_modules/next/dist/docs/` before asserting API behaviour.
-5. Deliver the review in the §12 format.
+> **สรุปภาษาไทย:** เอกสารนี้รวม brief กับ PRD เป็นฉบับเดียว ตรวจของที่มีอยู่แล้วก่อนเสนอสร้างใหม่ (Print Station ที่ยังไม่ push และ branch `codex/delivery-today` ที่มีระบบออเดอร์เดลิเวอรี + test อยู่แล้ว) พบว่า **เลข migration 0020 ชนกันสองไฟล์** และ 0016 อยู่ใน branch อื่น ไม่ใช่ `master` จึงห้าม rollout จนกว่าจะเคลียร์ migration เรื่อง driver / USB / ความยาวงานพิมพ์ ปรับเป็น "สมมติฐานที่ต้องทดสอบกับเครื่องจริง" พร้อมเกณฑ์เลือกวิธีเชื่อมต่อ
 
 ---
 
-## 1. Product context
+## 0. How to use this document
 
-- **Business:** one small Thai sauce maker (bottled sauces), 1–2 people; sells in person, TikTok Shop, Shopee, Lazada. THB, Asia/Bangkok.
-- **Direction:** run the owner's own shop dependably first; offer subscriptions to other small food makers later. Prepare the architecture for that, **defer billing and commercial features** until the owner's workflows are validated.
-- **Hardware (confirmed by owner):** iPhone (orders keyed in the web app in Safari); **PeriPage A6, 203 dpi**, plain receipt paper; PeriPage iOS app over Bluetooth; a **Windows** shop computer; connecting the A6 to Windows **by USB is acceptable**.
-- **Stack:** Next.js 16 (App Router, server actions), React 19, Supabase (Postgres, RLS, Auth: Google OAuth only), Tailwind 4, Recharts. Netlify auto-deploys `master`. `preview/` = no-build offline mockup.
+**Reviewing agent:** planning/review only — do not modify code or production data, do not push or deploy, do not run migrations.
+1. Read `AGENTS.md`, `docs/audit-2026-08.md`, `DELIVERY-SETUP.md` on branch `origin/codex/delivery-today`.
+2. Verify each claim in §2 against the cited commit/file:line; mark *confirmed / refuted / unverifiable*.
+3. Keep **confirmed defects**, **assumptions/hypotheses** (§6), and **proposals** separate.
+4. Return the review in the §13 format.
 
-## 2. Current-state assessment
-
-### 2.1 Live on production (`origin/master` = `76b4e18`)
-| Capability | Evidence |
+**Where the work is:**
+| Location | Contents |
 |---|---|
-| Ingredients, purchases (incl. purchase trips), recipes with costing (yield, evaporation, waste, labour, overhead, packaging, VAT, platform fee), batches + yield variance, finished-goods stock, sales, cash closing, expenses, analytics, CSV export, multiple businesses per login | `src/app/*`, `src/lib/costing.ts` |
-| 5-tab phone navigation; Sell cart (tap-to-add, checkout sheet, one multi-row insert) | `src/components/tab-bar.tsx`, `src/app/sales/sell-cart.tsx`, `logCartSale` |
-| Bangkok-time `todayISO()` | `src/lib/dates.ts` |
-| PWA icons; manifest/icons excluded from auth proxy | `src/app/icons/[size]/route.tsx`, `src/proxy.ts` |
-| **Workflow A (phone-assisted printing):** receipt/bag-label PNG with logo, shop contact, large customer name, items, total, thank-you; after Charge a *Print label* button opens the iOS Share Sheet; download fallback | `src/lib/receipt.ts`, `src/app/settings/*`, commit `7c02231` |
+| `origin/master` (`76b4e18`, deployed by Netlify) | Live app |
+| Local `master` in `D:\Claude-Phol\Claude_Code\sauce-cost-tracker` — ahead of origin, **not pushed** | `35f3156` Print Station, `8f5d47b` printer test page, `64a78f6`/`9700628` PRD v1/v2, this v3 |
+| `origin/codex/delivery-today` (`f011a36`, 2026-09-13, based on `66a5b4e`) | Made-to-order (0016), Thai delivery queue `/today`, atomic booking RPC, PGlite DB tests in CI (0020_delivery_orders) — **not merged, migrations not applied** per its `DELIVERY-SETUP.md` |
+| `origin/mobile-ux` | Already merged into master; stale |
+| Review package | `D:\Claude-Phol\Claude_Code\ordexa-review\` (PRD + patches of local commits) |
 
-### 2.2 Local only (not pushed)
-| Commit | Content |
-|---|---|
-| `35f3156` | **Workflow B prototype:** `print_jobs` table (migration 0021); checkout queues a job when *Print on = Shop computer*; `/print-station` page (Chrome/Edge on Windows) opens the A6 via **Web Serial**, gets jobs via Supabase realtime + 15 s poll, claims them with one `UPDATE … WHERE status='queued' RETURNING`, prints with a reverse-engineered A6 raster driver (`src/lib/peripage.ts`). |
-| `8f5d47b` | `preview/print-test.html` stand-alone printer test (same renderer/driver). |
-| `64a78f6` | PRD v1. |
+**Environment constraints:** `npm ci` fails on the owner's Windows machine (registry `ECONNRESET`); CI (`.github/workflows/build.yml`) runs `npm ci` + `next build` only on push/PR to `master`. `next build` type-checks (`tsconfig` `strict: true`, no `ignoreBuildErrors`). Next.js 16 — consult `node_modules/next/dist/docs/` before asserting API behaviour.
 
-### 2.3 Migrations
-| File | State | Action |
+---
+
+## 1. Product context and direction
+
+- **Business:** owner-operated Thai food business (bottled sauces sold in person and on TikTok Shop / Shopee / Lazada; the delivery branch adds a made-to-order food line on Grab / LINE MAN). THB, Asia/Bangkok. 1–2 people.
+- **Direction:** dependable daily operation first; **subscriptions to other businesses later**. Prepare the architecture (business isolation, membership-ready access, configurable branding, entitlement boundaries) but **defer billing and commercial features** until the owner's workflows are validated.
+- **Priorities, in order:** (1) correctness — costing consistency, stock reconciliation, historical snapshots, transactional operations, validation, critical automated tests; (2) beginner experience; (3) daily efficiency — mobile order entry, production, purchasing, printing, closing; (4) professional capabilities — permissions, audit history, recipe versions, suppliers, lots, expiry, locations; (5) subscription readiness.
+- **Core workflows:** ingredients & purchases → recipes & product cost → production batches & finished goods → customer orders, payments, sales → personalised receipts / bag labels → stock, expenses, margins, daily closing. **Retain useful existing functionality; evaluate before replacing.**
+- **Confirmed hardware:** orders keyed in the web app on an **iPhone** (Safari); **PeriPage A6, 203 dpi**, plain receipt paper; PeriPage **iOS app over Bluetooth**; a **Windows** computer at the shop; connecting the A6 to Windows **by USB is acceptable**.
+- **Stack:** Next.js 16, React 19, Supabase (Postgres, RLS, Google OAuth), Tailwind 4, Recharts, Netlify.
+
+---
+
+## 2. Current-state assessment (evidence-based)
+
+### 2.1 Implementation status matrix
+Legend: ✅ yes · ❌ no · ◐ partial · — n/a
+
+| Capability | Written | Automated test | Hardware-tested | Deployed | Active in prod | Evidence |
+|---|---|---|---|---|---|---|
+| Costing, stock, batches, sales, closing, expenses, analytics, export | ✅ | ❌ | — | ✅ | ✅ | `src/lib/costing.ts`, `src/app/*` |
+| 5-tab phone nav, Sell cart, one multi-row insert | ✅ | ❌ | — | ✅ | ✅ | `78e4ced`, `7ca2264` |
+| Bangkok `todayISO()` | ✅ | ❌ | — | ✅ | ✅ | `src/lib/dates.ts` |
+| PWA icons / public manifest | ✅ | ❌ | ❌ (install not verified on device) | ✅ | ✅ | `745b56d` |
+| Receipt/label **image** + iOS Share Sheet + download fallback | ✅ | ❌ | ❌ | ✅ | ✅ (name-only content) | `src/lib/receipt.ts` (`7c02231`) |
+| **Branding** (logo, address, phone, LINE, thank-you, print-after-sale toggle) + Shop & label settings | ✅ | ❌ | ❌ | ✅ | **❌ — migration 0020 not applied**; code falls back to name-only, settings save returns "run 0020" | `7c02231`: `0020_business_receipt_profile.sql:15–23`, `src/lib/data/receipt-profile.ts` |
+| Logo dithering at upload; bold text at 1:1 | ✅ | ❌ | ❌ | ❌ | ❌ | `35f3156` (local) |
+| **Print Station** (queue, Web Serial, A6 driver) | ✅ | ❌ | **❌** | ❌ | ❌ | `35f3156` (local), migration 0021 |
+| Printer test page | ✅ | ❌ | ❌ | ❌ | ❌ | `8f5d47b` (local) |
+| Made-to-order recipes | ✅ | ◐ (PGlite) | — | ❌ | **unknown** (audit says 0016 applied; branch docs say verify) | `origin/codex/delivery-today` `7b587d3` |
+| Delivery queue `/today`, atomic booking, retry-safe, cross-user RLS | ✅ | ✅ PGlite in CI | — | ❌ (Netlify branch preview only, if any) | ❌ | `9d45d90`, `tests/delivery-orders.mjs`, `40d70c7` |
+
+### 2.2 Evaluation of the existing Print Station (`35f3156`) — reuse before rebuilding
+| Aspect | Finding | Verdict |
 |---|---|---|
-| `0001`–`0015`, `0017`–`0019` | In repo; believed applied | Verify against prod `supabase_migrations` history (read-only). |
-| **`0016_made_to_order_recipes.sql`** | **Absent from repo**; audit states it is applied in prod | **Blocker for new migrations.** Reconcile repo vs prod schema first. Do **not** recreate or re-run 0016 from the audit's description. |
-| `0020_business_receipt_profile.sql` | In repo (pushed), **not applied** | Apply only after the reconciliation. Code tolerates absence. |
-| `0021_print_jobs.sql` | Local only, **not applied**; depends on 0020 | Will be revised by §5.3 (status model, content snapshot, idempotency, stations) before anyone applies it. |
+| Queue table | `print_jobs` with `payload jsonb`, RLS by `user_id` (`0021_print_jobs.sql:16`) | **Reuse**, revise columns |
+| Status model | `queued/printing/printed/failed` (`0021:18`); `finishPrintJob` sets `printed` after bytes are written (`print-station/actions.ts:55`) — claims physical output it cannot observe | **Defect** → sent/uncertain model (PJ-04/06) |
+| Claiming | Single `UPDATE … SET status='printing' WHERE business_id=… AND status='queued' RETURNING` (`actions.ts:34–45`) — row-level atomic in Postgres, but **not bound to a station**, no `claimed_at`, no lease/timeout | **Reuse pattern**, add station + lease (PJ-05/06); prove with a PGlite concurrency test |
+| Stuck jobs | A job left `printing` has only manual Retry, which re-queues and can duplicate (`actions.ts:62–66`) | **Defect** → `uncertain`, no blind retry |
+| Content | Job stores lines/total/customer; station merges the **current** profile at print time (`print-station.tsx:77`) | **Defect** → immutable snapshot (PJ-02) |
+| Duplicate auto jobs | Auto job inserted inside `logCartSale` after the sale insert (`sales/actions.ts:149–166`); a retried checkout creates a second sale **and** second job | **Defect** → order idempotency + unique auto job (ORD-02, PJ-03) |
+| Transport | Web Serial, reverse-engineered A6 framing (`peripage.ts:14–20, 99–113`), MessageChannel pacing (`:115`), threshold 190 (`:41`) | **Unverified hypothesis** — keep as candidate B1/B2 (§6), not the decision |
+| Wake-up | Realtime with `worker: true` + 15 s poll (`print-station.tsx:12, 126–132`); Wake Lock best-effort (`:151`) | Reuse; needs offline/heartbeat UX (WB-03) |
+| Device auth | Any signed-in browser of the owner can claim | **Gap** → approved stations (WB-02) |
 
-### 2.4 Verified gaps and defects
-| # | Finding | Type | Evidence |
-|---|---|---|---|
-| G1 | Checkout has **no idempotency**: a retried request after a timeout can log the sale and deduct stock twice | Defect | `logCartSale` inserts without a client key (`src/app/sales/actions.ts`) |
-| G2 | Cart = N `sales` rows with no order header/number | Design gap | same; audit F11 |
-| G3 | Void sale deletes, then restores stock in a separate call | Defect | `deleteSale` → `delete()` then `rpc("adjust_finished_goods_stock")` (F2) |
-| G4 | Batch delete restores ingredients with read-modify-write | Defect | `src/app/batches/actions.ts:169–178` (F3) |
-| G5 | Recipe margin subtracts platform fee **and VAT**; sale margin subtracts fee only | Defect (inconsistent reporting) | `calcRecipeCost` vs `calcSaleMargin` in `src/lib/costing.ts` |
-| G6 | Print job status `printed` claims physical output the system cannot observe; stuck `printing` has no recovery | Defect (prototype) | `print_jobs.status` check in 0021; `print-station.tsx` |
-| G7 | Station merges the **current** shop profile at print time → a reprint after editing branding differs from the original | Defect (prototype) | `processQueue` in `src/app/print-station/print-station.tsx` |
-| G8 | Jobs are scoped by user/business RLS but not bound to an approved station/device | Gap | 0021 |
-| G9 | Access model is single-owner (`user_id = auth.uid()`) everywhere | Constraint for teams/subscription | `0005_businesses.sql` |
-| G10 | Dashboard N+1 (F12); uncached business lookup per call (F13) | Performance | `dashboard.ts:155–157`; `businesses.ts` |
-| G11 | No automated tests; costing untested (F10) | Gap | no runner in `package.json` |
-| G12 | Platform fee presets duplicated | Tech debt | `PLATFORM_FEE_PRESETS` in `costing.ts` and `PLATFORM_OPTIONS` in `src/lib/platforms.ts` |
+### 2.3 Evaluation of `codex/delivery-today` — overlaps this plan
+| Asset | Relevance |
+|---|---|
+| `delivery_orders` with **client-generated UUID primary key**, items jsonb (≤50, validated by trigger), status machine via `advance_delivery_order` | Already an **order header**; the client-supplied `id` gives idempotent creation. Candidate basis for ORD-01 instead of a new `orders` table. |
+| `book_delivery_order`: row locks (`for update`) on order, finished goods, ingredients; inserts all sales in one transaction; `booked_at` marker makes retry a no-op | The **transactional + retry-safe** pattern this PRD requires for checkout (ORD-02). |
+| `protect_delivery_sale` trigger blocks deleting/changing linked sales | Addresses void-restore races for linked sales (G3) — until a transactional refund exists. |
+| `tests/delivery-orders.mjs` on **PGlite** (in-memory Postgres), wired into CI (`npm run test:delivery`) | Solves "no DB tests / no local DB": runs SQL migrations in Node without Supabase. **Adopt as the test harness** for print jobs and orders. |
+| Thai-first `/today` UI; tab-bar/nav changes | **Conflicts** with master's 5-tab phone nav (`7ca2264`) — merge needs design decision. |
+| **Migration `0020_delivery_orders.sql`** | **Number collision** with master's `0020_business_receipt_profile.sql`. |
 
-**Correction to v1:** v1 said CI "has no type check". `next build` type-checks (`tsconfig` `strict: true`; `next.config.ts` has no `ignoreBuildErrors`). What is missing is a fast standalone `tsc --noEmit` step and CI on non-`master` branches.
+### 2.4 Migration audit (must be resolved before any rollout)
+| Migration | In `master` repo | Elsewhere | Applied to prod? | Finding |
+|---|---|---|---|---|
+| 0001–0015, 0017–0019 | ✅ | — | believed ✅ (verify) | — |
+| **0016_made_to_order_recipes** | **❌** | `origin/codex/delivery-today` (`7b587d3`, 2026-08-17) | **Conflicting sources**: audit (2026-08-18, `docs/audit-2026-08.md:15,24`) says applied; `DELIVERY-SETUP.md` says verify before running, do not re-run | Master's history lacks a migration that prod may contain → **schema drift risk**. Read prod `supabase_migrations.schema_migrations` / inspect `recipes.is_made_to_order` read-only. Never recreate 0016 from the audit text. |
+| **0020_business_receipt_profile** | ✅ (pushed, `7c02231`) | — | ❌ (owner not yet run) | Code deployed and tolerant; feature inactive. |
+| **0020_delivery_orders** | ❌ | `codex/delivery-today` | ❌ (per its doc) | **Collides with the above.** Renumber one before either is applied. |
+| 0021_print_jobs | local only | — | ❌ | Will be **revised** (§5.4) before anyone applies it; also depends on 0020 receipt profile. |
 
-### 2.5 Not verified (needs hardware)
-- Any print from the station prototype to a physical A6.
-- Whether PeriPage appears as a target in the iOS Share Sheet for PNGs (Workflow A step 3).
-- How Windows enumerates the A6 over USB (COM port vs printer class) and whether the official driver is required.
-- Printable width/margins on the owner's paper (384 dots is the A6 head width per community docs — not yet measured).
-- Whether the A6 can be used alternately by the iPhone app (Bluetooth) and Windows (USB/Bluetooth) without re-pairing.
+**Rule proposed:** migrations are numbered at merge time, unique across all branches; a migration is applied only from `master` after merge; the prod `schema_migrations` list is the source of truth and is recorded in `docs/` after each apply.
+
+### 2.5 Confirmed defects / gaps (master)
+| # | Finding | Evidence |
+|---|---|---|
+| G1 | Checkout not idempotent — retried request double-books sale + stock (+ print job) | `logCartSale`, `src/app/sales/actions.ts` |
+| G2 | Cart = N `sales` rows, no order header/number | same; audit F11 |
+| G3 | Void deletes then restores in a separate call | `deleteSale` → `delete()` then `rpc("adjust_finished_goods_stock")` (F2) |
+| G4 | Batch delete restores ingredients read-modify-write | `src/app/batches/actions.ts:169–178` (F3) |
+| G5 | Recipe margin deducts fee **and VAT**; sale margin deducts fee only | `calcRecipeCost` vs `calcSaleMargin`, `src/lib/costing.ts` |
+| G6–G8 | Print Station status overclaim, mutable content, no station binding | §2.2 |
+| G9 | Single-owner RLS (`user_id = auth.uid()`) everywhere | `0005_businesses.sql` |
+| G10 | Dashboard N+1; uncached business lookup | `dashboard.ts:155–157` (F12), `businesses.ts` (F13) |
+| G11 | No tests on master; costing untested (F10) | `package.json` |
+| G12 | Duplicate platform fee presets | `costing.ts` `PLATFORM_FEE_PRESETS`, `src/lib/platforms.ts` |
 
 ---
 
 ## 3. Goals, non-goals, success measures
-
-**Goals**
-1. Orders are never lost or duplicated, and stock is deducted exactly once per order.
-2. A common order takes ≤ 2 taps after item selection; the bag label prints without further interaction when the shop computer is available, and with ≤ 3 taps via the phone otherwise.
-3. Every cost, margin, stock and cash number is consistent across screens and explainable.
-4. A beginner reaches a correct cost-per-bottle in ≤ 5 minutes.
-5. Business data is isolated so subscriptions can launch without re-architecture.
-
-**Non-goals (now):** restaurant POS concepts (tables, modifiers, kitchen routing), billing/entitlements, native apps, marketplace APIs (CSV import later), general-ledger accounting, payroll.
-
-**Measures:** duplicate-order count = 0 in pilot; print success without manual intervention ≥ 95% of station-mode orders during the limited rollout; zero orders lost on print failure; median taps per common order.
+**Goals:** (1) no lost or duplicated orders; stock deducted exactly once; (2) common order ≤ 2 taps after item selection; label prints hands-free when the station is available, ≤ 3 taps via phone otherwise; (3) consistent, explainable numbers; (4) beginner reaches correct cost-per-unit ≤ 5 min; (5) business isolation ready for subscriptions.
+**Non-goals now:** billing/entitlements, restaurant table/kitchen features, marketplace/delivery APIs, native apps, general ledger, payroll.
+**Measures (limited rollout):** duplicate orders = 0; lost orders on print failure = 0; station-mode labels printed without manual intervention ≥ 95%; every `uncertain` job resolved by a person.
 
 ## 4. Users and workflows
+Owner (all); helper/seller (later: Sell + Stock, no costs); print station (device). Printing workflows:
 
-| User | Now | Later (subscription) |
-|---|---|---|
-| Owner | Everything | Owner role per business |
-| Helper/seller | — | Sell + Stock, no costs/profit |
-| Print station (device) | Shop PC | Approved device per business |
+**Workflow A — mobile-assisted printing (PeriPage iOS app).** 1) user saves order; 2) app renders print-ready image; 3) user shares it to PeriPage *if the installed app accepts it*; 4) user confirms printing inside PeriPage; 5) fallback: save/download image for manual import. *Assisted, not unattended.* Do not assume Safari or a PWA can control the printer over Bluetooth.
 
-Core workflows: ingredients & purchases → recipes & costing → batches & finished goods → **orders, payments, sales** → **receipt / bag-label printing** → stock, expenses, margins, daily closing.
+**Workflow B — automatic printing via the shop computer.** 1) user saves order on the iPhone and requests shop printing; 2) server creates a durable print job for that business; 3) an approved Windows station retrieves it; 4) station sends it to the A6 by the transport chosen in §6; 5) app shows job status and recovery actions. The computer must be on and connected; behaviour when offline/sleeping/disconnected is specified (WB-03/04).
 
 ---
 
 ## 5. Requirements
 
-### 5.1 Orders (new foundation — prerequisite for reliable printing)
+### 5.1 Orders (foundation for reliable printing)
 | ID | Requirement | Acceptance |
 |---|---|---|
-| ORD-01 | `orders` header (business, order number per business per day or sequence, customer name, customer instructions, platform, payment method/status, totals, `client_request_id` unique per business) + `order_items`; existing per-recipe `sales` rows become items or are linked by `order_id` | Checkout writes header + items + stock deduction in **one DB transaction (RPC)** |
-| ORD-02 | **Idempotent checkout**: client generates `client_request_id` when the checkout sheet opens; a repeat with the same id returns the original order | Double tap, network drop + retry, and page reload → exactly one order, one deduction |
-| ORD-03 | Backfill: existing `sales` get synthetic single-item orders (or remain orderless with a nullable `order_id`) — reviewer to choose | Reports unchanged before/after backfill |
-| ORD-04 | Void is transactional (fixes G3) and never deletes history silently | Void restores stock exactly once; audit row kept |
-| ORD-05 | Margin rules unified (fixes G5): one function for recipe (theoretical) and order (actual) with the same deductions; VAT captured per order if applicable | Same inputs → same margin on Recipe, Home, Financials |
+| ORD-01 | **Order header** + items with order number, customer name, customer instructions, channel/platform, payment method/status, totals. **Evaluate extending `delivery_orders` (branch) before creating a new `orders` table.** | Decision record; one header per checkout |
+| ORD-02 | **Idempotent checkout**: client-generated order id (the branch's UUID-PK pattern) or `client_request_id` unique per business; header + items + stock deduction (+ auto print job) in **one transactional RPC** with row locks | Double tap, network drop + retry, reload → one order, one deduction, one auto job (PGlite test + physical P-DUP) |
+| ORD-03 | Backfill/compatibility for existing `sales` (nullable `order_id` vs synthetic orders) | Reports identical before/after |
+| ORD-04 | Transactional void/refund; linked sales protected (branch `protect_delivery_sale` pattern) | Stock restored exactly once; history kept |
+| ORD-05 | One margin function for recipe (theoretical) and order (actual) with identical deductions | Same inputs → same margin on every screen |
 
 ### 5.2 Receipt and bag-label content
+| ID | Requirement |
+|---|---|
+| LBL-01 | Business-configurable: logo optimised for monochrome, shop name, contact details, personalised thank-you (**exists in code, inactive until 0020**) |
+| LBL-02 | Two templates: **Receipt** (prices, total, payment status) and **Bag label** (prominent customer name, order number, packing instructions; prices optional) |
+| LBL-03 | Order number and date **and time**; items, quantities, customer instructions |
+| LBL-04 | Thai + English, long names, wrapping, multiple items, Thai vowels/tone marks |
+| LBL-05 | Printable width, margins, resolution **measured on the owner's A6 paper**; not inferred from nominal paper size |
+
+### 5.3 Reliability (both workflows)
+- Order persisted **before** any print attempt; print failure never loses or alters the order.
+- Retrying printing never creates another sale or deducts stock again.
+- Repeated taps/reconnects never create duplicate automatic jobs.
+- Receipt content used for each job is preserved **immutably**.
+- Intentional reprints require an explicit action and are recorded as reprints.
+- Status distinguishes **queued, processing, sent, failed, uncertain**; a share or driver/port submission is never shown as confirmed physical printing.
+- Ambiguous outcomes are resolved by a person; no blind automatic retry.
+- Printer pairing, stations, and jobs are scoped to the correct business.
+
+### 5.4 Print jobs (revise 0021 before it is applied)
 | ID | Requirement | Acceptance |
 |---|---|---|
-| LBL-01 | Business-configurable: monochrome-optimised logo, shop name, contacts, thank-you message | Exists (live); logo dithering at upload is in the local commit |
-| LBL-02 | Two templates: **Receipt** (prices, total, payment status) and **Bag label** (large customer name, order number, packing instructions, prices optional) | Owner can choose default per business and per print |
-| LBL-03 | Order number and date **and time** on both | Printed values match the order |
-| LBL-04 | Thai + English, long names, wrapping, many items, Thai vowels/tone marks | Physical tests P-TH, P-LONG pass (§7) |
-| LBL-05 | Printable width, margins, resolution **measured on the owner's A6 paper**, not inferred from nominal size | Calibration print recorded in repo |
+| PJ-01 | Created only after the order commits (inside the order RPC for auto jobs) | Order intact when printing fails |
+| PJ-02 | **Immutable receipt snapshot**: full render input incl. branding version (or the rendered PNG) stored on the job; never re-read from current settings | Reprint after branding edit reproduces the original |
+| PJ-03 | One `auto` job per order (unique `(order_id) where kind='auto'`); `reprint` jobs explicit with actor | Repeated taps/reconnects → one auto job |
+| PJ-04 | Status: `queued → processing → sent → (failed | uncertain)`; `sent` = accepted by port/driver/share; UI says "Sent to printer" | No "Printed" claim anywhere |
+| PJ-05 | **Atomic claim bound to a station**: one statement sets `status='processing', station_id, claimed_at` only where `status='queued'`, returns rows; lease timeout | Two tabs/devices → each job printed once (PGlite concurrency test + P-TABS) |
+| PJ-06 | Lease expired or crash between send and record → **`uncertain`**, never auto-retried; person resolves "Printed OK" / "Reprint" | P-CRASH → `uncertain`, no duplicate |
+| PJ-07 | RLS by business; stations approved per business | Cross-business access denied (PGlite test) |
 
-### 5.3 Printing — shared job model
+### 5.5 Workflow A — independent milestone
 | ID | Requirement | Acceptance |
 |---|---|---|
-| PJ-01 | Order is committed **before** any print attempt; print failure never affects the order | Kill printer/station mid-print → order intact |
-| PJ-02 | Job stores a **content snapshot** (rendered payload incl. branding version, or the PNG) at creation (fixes G7) | Reprint after branding edit reproduces the original |
-| PJ-03 | One automatic job per order (unique `(order_id, kind='auto')`); reprints are explicit, separate jobs with `kind='reprint'` and actor | Repeated taps/reconnects never create a second auto job |
-| PJ-04 | Status model: `queued → processing → sent → (failed | uncertain)`; `sent` = bytes accepted by the port/driver, **never** "printed". UI copy says "Sent to printer", not "Printed" | No screen claims physical output |
-| PJ-05 | Claim is atomic and bound to a station (`claimed_by_station`, `claimed_at`); two tabs/devices cannot print the same job | Two station tabs open → each job prints once |
-| PJ-06 | A job left `processing` past a timeout, or where the station died after sending but before recording, becomes **`uncertain`**; never auto-retried; user resolves with "Printed OK" / "Reprint" | Crash-after-send test → `uncertain`, no duplicate |
-| PJ-07 | Jobs, stations and pairing scoped to the business via RLS | User of business B cannot see/claim A's jobs (automated test) |
+| WA-01 | Image → Share Sheet → PeriPage → confirm | **Verified on owner's iPhone** that PeriPage accepts shared PNGs; else document the working route (Save to Photos → import) |
+| WA-02 | Save/download fallback | Works when sharing is unavailable |
+| WA-03 | Records "shared", never "printed" | — |
 
-### 5.4 Workflow A — phone-assisted printing (independent milestone)
+### 5.6 Workflow B — independent milestone
 | ID | Requirement | Acceptance |
 |---|---|---|
-| WA-01 | After save, generate the print-ready image; Share Sheet → PeriPage app; user confirms in PeriPage | **Verified on the owner's iPhone** that PeriPage is offered for PNG shares; if not, document the working route (Save to Photos → import in PeriPage) |
-| WA-02 | Fallback: save/download image | Works when sharing is unavailable |
-| WA-03 | Never labelled as printed; the app records "shared" only | — |
-
-### 5.5 Workflow B — automatic printing via the shop computer (independent milestone)
-| ID | Requirement | Acceptance |
-|---|---|---|
-| WB-01 | Transport chosen from the **hardware spike** (§6.2), not assumed | Decision record with test evidence |
-| WB-02 | Station registration: a station is a named device approved by the owner in settings (stored `print_stations`, `last_seen_at`); only approved stations claim jobs (fixes G8). Full per-device tokens deferred to subscription phase | Unapproved browser cannot claim |
-| WB-03 | Offline behaviour: jobs stay `queued` while no station is online; phone shows "Shop printer offline — will print when it's back" plus *Print from phone*; station heartbeat drives the indicator | PC asleep/closed → phone warns within 30 s; jobs print on return in order |
-| WB-04 | Recovery: page reload, PC sleep/wake, USB unplug/replug, printer power cycle each have a documented, tested recovery path | Tests P-REC-* pass |
-| WB-05 | Operates alongside Workflow A; the A6 used alternately by iPhone app and PC | Test P-SWITCH passes or limitation documented |
-
-### 5.6 Correctness, beginner, operations, professional (unchanged intent, re-sequenced in §8)
-- **Correctness:** unit tests for costing and order math (F10); F3 batch restore via RPC; F9/F7 purchase edits and price basis; F12/F13 performance; `tsc --noEmit` + CI on all branches.
-- **Beginner:** first-run wizard; Thai UI default; explainers; empty states; undo; today-first Home; PromptPay QR; per-business feature toggles.
-- **Operations:** days-of-stock and batch planning; best-before/expiry; receivables (marketplace payouts/COD); supplier price history; profit by channel.
-- **Professional:** membership & roles (G9), audit log, recipe versions, suppliers, lots, locations, CSV marketplace import, tax invoices. **Business isolation is required from the start** (already per-owner via RLS; every new table must follow it). Invitations, complex roles and billing come after the owner's shop is stable.
+| WB-01 | Transport chosen by §6 criteria from hardware evidence | Decision record |
+| WB-02 | Station approval: named device approved by owner (`print_stations`, `last_seen_at`); only approved stations claim; per-device tokens deferred to subscription phase | Unapproved browser cannot claim |
+| WB-03 | Offline: jobs stay queued; phone shows "Shop printer offline — prints when it's back" + *Print from phone*; heartbeat drives indicator | Station offline → phone warns ≤ 30 s; jobs print in order on return |
+| WB-04 | Documented, tested recovery: page close/reload, PC sleep/wake, USB unplug/replug, printer power cycle, paper out | P-REC-* pass |
+| WB-05 | Coexists with Workflow A; A6 alternates between iPhone app and PC | P-SWITCH pass or limitation documented |
 
 ---
 
-## 6. Technical proposal
+## 6. Printing transport — hypotheses to test (no decision yet)
 
-### 6.1 Order model
-`orders(id, business_id, user_id, order_no, client_request_id unique(business_id, client_request_id), customer_name, instructions, platform, fee_pct, payment_method, payment_status, total, created_at)` + `order_items(order_id, recipe_id, qty, line_total, cost_per_bottle_snapshot)`. A `create_order` security-definer RPC performs insert + stock deduction + optional auto print job in one transaction and returns the existing order on a repeated `client_request_id`. `sales` either becomes a view over items or gains `order_id` (reviewer to recommend; prefer the smaller migration).
+**Principle:** the existence of Print Station code is **not** evidence that its transport is right. Choose by the criteria below after the hardware spike.
 
-### 6.2 Printing transport — hardware spike (decide by evidence)
-| Option | Install | Variable-length labels | Outcome visibility | Notes |
+### 6.1 Hypotheses
+| # | Hypothesis | Source / basis | Test | If false |
 |---|---|---|---|---|
-| B1 Web Serial over **Bluetooth** (prototype exists) | none | yes | sent/failed | Reverse-engineered protocol; Bluetooth may be held by the iPhone app |
-| B2 Web Serial over **USB**, *only if* the A6 enumerates as a serial/COM device | none | yes | sent/failed | A COM port appearing is necessary, **not sufficient**: must confirm it is the A6, opens, and accepts the same framing/chunking |
-| B3 **Official PeriPage Windows driver** + silent printing (Chrome `--kiosk-printing` on the station page, or a print bridge) | driver (+ bridge) | **limited** — driver requires a defined page size ([community report](https://github.com/eliasweingaertner/peripage-A6-bluetooth)); needs fixed-length template or custom sizes | sent to Windows spooler only | Uses the vendor path; installing the driver may claim the USB interface (rules out B2) |
-| B4 Existing bridge (QZ Tray: free, silent printing needs a paid certificate + Java; PrintNode: monthly, volume-based) | agent install | depends on driver | spooler/agent | Evaluate licensing/recurring cost against subscription plans |
-| B5 Custom Windows helper | our installer + updates | yes | best (can read port errors) | Only if B1–B4 fail; highest maintenance |
+| H1 | PeriPage iOS app accepts PNGs from the iOS Share Sheet | Assumed; not verified | Share a test PNG on the owner's iPhone | Workflow A uses Save to Photos → import |
+| H2 | A6 over **Bluetooth** exposes a serial (SPP/RFCOMM) port that Chrome/Edge Web Serial can open on Windows | Chrome docs: [Web Serial](https://developer.chrome.com/docs/capabilities/serial), [Serial over Bluetooth RFCOMM](https://developer.chrome.com/blog/serial-over-bluetooth); community: A6 uses SPP/RFCOMM ([eliasweingaertner/peripage-A6-bluetooth](https://github.com/eliasweingaertner/peripage-A6-bluetooth)) | `preview/print-test.html` → Connect over BT | Drop B1 |
+| H3 | Over **USB**, the A6 enumerates as a serial/COM device | Unknown | Device Manager: *Ports (COM & LPT)* vs *Printers*/*USB* | Drop B2 |
+| H4 | A visible COM port accepts the **same** framing: reset `10fffe01+00×12`, `GS v 0` blocks ≤ 255 rows × 48 bytes, `1b4a40`, `10fffe45`, 122-byte writes / 20 ms | Community reverse engineering ([bitrate16/peripage-python](https://github.com/bitrate16/peripage-python), [eliasweingaertner](https://github.com/eliasweingaertner/peripage-A6-bluetooth)); **not vendor-documented** | Test print; vary chunk/delay; long label | B1/B2 unusable → B3+ |
+| H5 | Printable width = 384 dots (48 mm) with usable side margins on the owner's paper | Community docs for A6 at 203 dpi | Calibration print with ruler marks | Adjust renderer width/margins |
+| H6 | **Official Windows driver** exists and prints from Windows apps | Vendor: [PeriPage app & PC driver page](https://www.peripageglobal.com/pages/try-on-app); third-party instructions reference a USB driver | Install on test basis; print PNG from browser dialog | Drop B3 |
+| H7 | Driver path **cannot** handle variable-length labels without a fixed page size | Community report: driver "needs a page size defined before printing" ([eliasweingaertner](https://github.com/eliasweingaertner/peripage-A6-bluetooth)); not vendor-confirmed | Print 2 lengths with custom page sizes / "auto" | If false, B3 becomes strong |
+| H8 | Silent printing without dialog is possible (Chrome `--kiosk-printing`, or a bridge) | Chrome command-line switch; QZ Tray / PrintNode docs ([QZ FAQ](https://qz.io/docs/faq)) | Station page with `--kiosk-printing` to default printer | B3 needs a bridge (B4) |
+| H9 | Installing the driver takes the USB interface away from Web Serial | Typical Windows printer-class behaviour; unverified | After H6, re-check H3 | Both paths may coexist |
+| H10 | The A6 can alternate between iPhone app (BT) and PC (USB or BT) without re-pairing each time | Unknown | P-SWITCH | Dedicate A6 to one host or accept manual switching |
 
-Spike procedure (≤ 1 hour on site): Device Manager check → `preview/print-test.html` over USB then Bluetooth → install vendor driver on a test basis and print a fixed-size PNG from the browser dialog → record results, paper width measurement, print time, Thai legibility.
+### 6.2 Candidate transports
+| Option | Summary |
+|---|---|
+| B1 | Web Serial over Bluetooth (prototype exists) |
+| B2 | Web Serial over USB (only if H3 **and** H4 hold) |
+| B3 | Vendor driver + silent browser printing (`--kiosk-printing`) |
+| B4 | Existing print bridge (QZ Tray: free, silent printing needs paid certificate + Java runtime; PrintNode: cloud, recurring volume-based fee) + vendor driver |
+| B5 | Custom Windows helper (our installer, updates, signing) |
 
-### 6.3 Security and isolation
-RLS on every new table; station approval (WB-02); jobs carry `business_id`; the realtime channel filter is advisory only — RLS is the guard. Later: `business_members` + `is_member(business_id, role)` helper replacing `user_id = auth.uid()`.
-
-### 6.4 Deployment
-Migrations are numbered, called out in commit messages, applied by the owner **after** repo/prod reconciliation (§2.3). Code must tolerate a not-yet-applied migration. Feature flag per business for station printing. Rollback: disable flag → Workflow A continues; migrations additive only in this phase.
+### 6.3 Selection criteria (score each option 0–3 from spike evidence; weights proposed)
+| Criterion | Weight |
+|---|---|
+| Unattended reliability over 2 weeks (no manual reconnects) | 5 |
+| Variable-length label support without waste/clipping | 4 |
+| Outcome visibility (can distinguish sent/failed; detect disconnect) | 3 |
+| Dependence on unofficial protocol (lower is better) | 3 |
+| Install + update burden on the shop PC | 3 |
+| Coexistence with Workflow A on the same A6 | 2 |
+| Recurring cost / licensing | 2 |
+| Suitability for future subscribers (support burden, per-tenant cost) | 2 |
+Tie-break: prefer zero-install options (B1/B2/B3 without bridge); B5 only if all others fail.
 
 ---
 
-## 7. Physical acceptance tests (run on the owner's hardware)
+## 7. Technical proposal (summary)
+- **Order model:** extend or generalise `delivery_orders` (client UUID PK, items, status machine, booking RPC) to cover walk-in/marketplace checkout; otherwise new `orders` + `order_items` with the same transactional RPC. Auto print job created inside the same transaction when enabled.
+- **Print jobs:** revised 0021 — `order_id`, `kind (auto|reprint)`, `snapshot jsonb` (immutable), `status (queued|processing|sent|failed|uncertain)`, `station_id`, `claimed_at`, `lease_expires_at`, `sent_at`, `resolved_by/at`; unique auto job per order; RLS by business.
+- **Stations:** `print_stations(id, business_id, name, approved, last_seen_at)`; claim RPC requires an approved station.
+- **Isolation:** every new table RLS-scoped by business; membership (`business_members`, `is_member()`) introduced before any staff access; the branch's policies already check both `user_id` and business ownership — use as the interim pattern.
+- **Deployment:** per-business flag for station printing; additive migrations only; rollback = flag off → Workflow A continues.
+
+---
+
+## 8. Pre-merge checks (required before anything reaches `master`)
+**Automated (CI):**
+1. Workflow triggers extended to **pull requests from any branch** (and pushes to review branches), so checks run before merge — today they run only on `master`.
+2. `npm ci` → `npx tsc --noEmit` → `npm run lint` (scoped to changed paths initially) → **PGlite DB tests** (`tests/*.mjs`: existing delivery tests + new tests for order idempotency, print-job claim concurrency, stuck-lease → uncertain, cross-business RLS) → `next build`.
+3. Migration lint: numbers unique across the branch vs `master`; no gaps/duplicates; each new migration applies cleanly in PGlite on top of the full chain.
+
+**Manual:**
+4. Migration review: applied-state checked against prod `schema_migrations` (read-only); additive; backfill verified; rollback noted in the commit message (existing AGENTS.md convention).
+5. Reviewer sign-off on the diff; "hardware untested" stated when applicable.
+6. For printing changes: the relevant physical tests in §9 recorded in `docs/`.
+
+---
+
+## 9. Physical acceptance tests (owner's hardware)
 | ID | Test | Pass |
 |---|---|---|
-| P-TH | Thai with vowels/tone marks above and below, mixed Thai/English | Legible, no clipped marks |
+| P-CAL | Calibration print: width, margins, ruler marks | Measured values recorded |
+| P-TH | Thai vowels/tone marks above/below, mixed Thai/English | Legible, nothing clipped |
 | P-LOGO | Colour and B/W logos | Recognisable, no black blocks |
-| P-LONG | 15-item order, 40-char customer name, 3-line instructions | Wraps correctly, nothing cut |
-| P-DUP | Double-tap Charge; airplane-mode during save then retry; reload | One order, one label |
-| P-TABS | Two station tabs/devices open | Each job prints once |
-| P-CRASH | Close station right after sending | Job `uncertain`, no auto reprint |
-| P-REC-USB / P-REC-PWR / P-REC-SLEEP / P-REC-PAPER | Unplug USB, power-cycle printer, sleep PC, paper out mid-job | Clear state + documented recovery; no lost orders |
-| P-REPRINT | Deliberate reprint after editing branding | Original content reprinted, marked reprint |
-| P-SWITCH | Print from iPhone app, then from PC, then iPhone again | Works or limitation documented |
-| P-WA | Workflow A end-to-end on the owner's iPhone | PeriPage reachable from Share Sheet or documented alternative |
+| P-LONG | 15 items, 40-char name, 3-line instructions | Wraps, nothing cut |
+| P-DUP | Double-tap Charge; network drop during save then retry; reload | One order, one label |
+| P-TABS | Two station tabs/devices | Each job printed once |
+| P-CRASH | Close station right after sending | `uncertain`, no auto reprint |
+| P-REC-USB / -PWR / -SLEEP / -PAPER | Unplug USB, power-cycle printer, sleep PC, paper out mid-job | Clear state, documented recovery, no lost orders |
+| P-REPRINT | Reprint after branding edit | Original content, marked reprint |
+| P-SWITCH | iPhone app → PC → iPhone app | Works or limitation documented |
+| P-WA | Workflow A end-to-end on owner's iPhone | H1 confirmed or alternative documented |
 
 ---
 
-## 8. Phased plan (revised order)
-
+## 10. Phased plan
 | Phase | Milestone | Depends on | Exit criteria |
 |---|---|---|---|
-| **0 Baseline** | Read the 3 local commits; reconcile migrations incl. missing 0016 against prod (read-only); confirm §2 claims | — | Reconciliation note committed; blockers listed |
-| **1 Hardware spike** | Workflow A on iPhone; B1/B2/B3 on Windows per §6.2; paper calibration | 0 | Transport decision + calibration recorded |
-| **2 Reliable orders & queue** | ORD-01–05, PJ-01–07, station approval (WB-02), revised 0021; unit tests for order math/costing; RLS tests | 0 (1 for transport code) | P-DUP, P-TABS, P-CRASH pass in staging |
-| **3 Workflow A polish** | LBL-02/03 templates, WA-01–03 | 2 | P-WA, P-TH, P-LONG pass |
-| **4 Workflow B limited rollout** | Station with chosen transport, offline/recovery UX, flag on for owner's shop only; share fallback kept | 1, 2 | 2 weeks in-shop use, ≥ 95% hands-free, zero lost/duplicate orders |
-| **5 Remaining correctness** | F3, F7/F9, F12/F13, `tsc --noEmit` + CI on branches | 2 | Tests green |
-| **6 Beginner UX** | Wizard, Thai UI, explainers, today-first Home, PromptPay | 5 | Beginner reaches cost/bottle ≤ 5 min |
-| **7 Operations** | Days-of-stock, expiry, receivables, supplier prices | 5 | — |
-| **8 Teams → subscription** | Membership/roles, audit log, then billing/entitlements | 4–6 stable | RLS isolation suite green |
+| **0 Baseline** | Verify §2; reconcile **0016** with prod (read-only); resolve **0020 collision** (renumber plan); decide how `codex/delivery-today` and master's phone UI merge | — | Reconciliation note in `docs/`; migration numbering plan approved |
+| **1 CI & test harness** | §8 automated checks on PRs; adopt PGlite harness on master | 0 | CI green on a PR from a review branch |
+| **2 Hardware spike** | H1–H10; P-CAL; score §6.3 | 0 (can run in parallel with 1) | Transport decision record |
+| **3 Reliable orders** | ORD-01–05 (reusing branch patterns) | 0, 1 | P-DUP logic tests green in PGlite |
+| **4 Print jobs v2** | PJ-01–07, stations (WB-02), revised 0021 | 1, 3 | P-TABS / P-CRASH logic tests green |
+| **5 Workflow A** | LBL-02/03 templates, WA-01–03 | 2, 3 | P-WA, P-TH, P-LONG pass |
+| **6 Workflow B limited rollout** | Chosen transport, WB-03/04, flag on for owner only; share fallback kept | 2, 4 | 2 weeks, ≥ 95% hands-free, zero lost/duplicate |
+| **7 Remaining correctness** | G4, F7/F9, G5, G10, G12, costing unit tests | 1 | Tests green |
+| **8 Beginner UX** | Wizard, Thai UI (reuse branch Thai copy), explainers, today-first home, PromptPay | 7 | Beginner ≤ 5 min to cost/unit |
+| **9 Operations** | Days-of-stock, expiry, receivables, suppliers | 7 | — |
+| **10 Teams → subscription** | Membership/roles, audit log; billing last | 6–8 stable | RLS isolation suite green |
 
-Each milestone ships as small reviewable commits; mobile-assisted and Windows-automatic printing remain independently testable (phases 3 and 4).
+Workflow A (phase 5) and Workflow B (phase 6) remain independently testable and releasable.
 
-## 9. Release and push policy
-- **Owner rule (current): nothing is pushed without the owner's explicit instruction.** Netlify deploys `master`.
-- Reviewer proposal (awaiting owner decision): push work to a **review branch / draft PR** for backup and review once diff and checks pass, clearly marked "hardware untested"; **do not** merge to `master` while migrations are pending or hardware is unverified. Note: CI currently runs only on `master` push/PR, so a draft PR to `master` is what triggers it.
-- Enabling automatic printing in the shop requires Phase 4 exit criteria.
+---
 
-## 10. Risks
+## 11. Release and push policy
+- **Owner rule (current): nothing is pushed without the owner's explicit instruction.**
+- Separate **backup/review** from **release**: pushing to a review branch or draft PR (after §8 checks can run) is recommended by the reviewer and **awaits the owner's decision**; merging to `master` (auto-deploys via Netlify) requires §8 checks, migration reconciliation, and — for printing — the relevant physical tests.
+- Migrations are applied by the owner only after merge and reconciliation, in the numbered order recorded in `docs/`.
+
+## 12. Risks
 | # | Risk | Mitigation |
 |---|---|---|
-| K1 | Unofficial A6 protocol; firmware/model variance | Hardware spike; keep Workflow A as permanent fallback |
-| K2 | Driver path can't do variable-length labels | Fixed-length label template or custom page sizes; prefer B1/B2 if they work |
-| K3 | Station depends on an awake, open browser on the PC | Heartbeat + phone warning + queue persistence |
-| K4 | Missing 0016 → schema drift | Phase 0 reconciliation before any migration |
-| K5 | Order-model migration touches money/stock | Transactional RPC, backfill verification, additive migrations, flag |
-| K6 | No local build; CI only on `master` | Add CI on branches + `tsc --noEmit` in Phase 5 (or earlier if owner approves branch pushes) |
-| K7 | Overengineering for a 1–2 person shop | Defer device tokens, bridges, billing; one station, one printer |
+| K1 | Schema drift (0016) and 0020 collision | Phase 0 before any migration |
+| K2 | Unofficial A6 protocol | Hypothesis testing; Workflow A as permanent fallback |
+| K3 | Driver path can't do variable length | H7 test; fixed-length template if B3 wins |
+| K4 | Station needs awake PC with open browser | Heartbeat, phone warning, durable queue |
+| K5 | Two parallel streams (master phone UX vs delivery branch) diverge further | Merge decision in Phase 0; single roadmap (this doc) |
+| K6 | Order-model change touches money/stock | Transactional RPC, PGlite tests, additive migrations, flag |
+| K7 | Overengineering for a 1–2 person shop | Defer device tokens, bridges, billing, complex roles |
 
-## 11. Review log — decisions on inputs
+## 13. Requested review output
+1. §2 claim verification (confirmed / refuted / unverifiable, file:line).
+2. Critical risks ranked with failure scenario and fix.
+3. Challenges to §5–§10 incl. what to cut as overengineering.
+4. ORD-01 recommendation: extend `delivery_orders` vs new `orders`; migration/backfill/rollback.
+5. Migration plan for 0016 / 0020 collision / 0021 revision.
+6. Transport scoring template to fill after the spike (§6.3).
+7. Go/no-go: review-branch push; merge to `master`; applying 0020 (receipt profile); applying 0021 as-is (expected no).
+8. Only decision-changing open questions.
+
+## 14. Open questions for the owner
+1. Push local commits to a **review branch / draft PR** now for backup and CI? (yes/no)
+2. Should `codex/delivery-today` (Grab/LINE MAN queue, `/today`) be merged into the main roadmap, and which navigation wins (Thai `/today` home vs 5-tab phone nav)?
+3. Can the reviewer get **read-only** access to production `schema_migrations` to settle 0016?
+4. Order numbers: daily reset (e.g. `240924-003`) or running sequence? Bag label hides prices by default?
+
+## 15. Review log
 | Source | Point | Decision |
 |---|---|---|
-| Brief | Order header + order number | **Adopted** (ORD-01) |
-| Brief | Two templates, time, instructions, payment status | **Adopted** (LBL-02/03) |
-| Brief | Status incl. sent/uncertain; never claim physical print | **Adopted** (PJ-04/06); fixes G6 |
-| Brief | Preserve job content | **Adopted** (PJ-02); fixes G7 |
-| Brief | Workflow B via USB **driver** | **Modified**: driver is one option (B3) with a page-size limitation; decided by spike |
-| Brief | Evaluate existing bridge vs custom helper | **Adopted** as B4/B5 in spike, lowest priority |
-| Brief | Branding "missing" | **Refuted in part**: logo/contact/thank-you live since `7c02231` |
-| Reviewer | COM port ≠ working protocol | **Adopted** (B2 wording) |
-| Reviewer | Printer-class ≠ cannot print from web | **Adopted** (B3) |
-| Reviewer | iPhone→PC path needs queue, pairing, recovery | **Adopted** (WB-02–04); queue exists in prototype |
-| Reviewer | Order correctness before auto-print | **Adopted**: Phase 2 precedes rollout |
-| Reviewer | 0016 missing — don't recreate from audit | **Adopted** (§2.3, Phase 0) |
-| Reviewer | CI does type-check via build | **Adopted**; v1 corrected (§2.4) |
-| Reviewer | Jobs bound to shop **and authorised device** from v1 | **Adopted in light form** (approved stations); tokens deferred |
-| Reviewer | Test A6 switching between iPhone app and Windows | **Adopted** (P-SWITCH) |
-| Reviewer | Revised phase order | **Adopted** (§8) |
-| Reviewer | Push to review branch / draft PR | **Pending owner decision** (§9) |
-
-## 12. Requested review output
-1. Claim verification table for §2 (confirmed / refuted / unverifiable, with file:line).
-2. Critical risks ranked with failure scenario and fix.
-3. Challenges to §5–§8: feasibility, reliability, security, usability, cost, **overengineering** — what to cut.
-4. Order-model recommendation (ORD-03: link vs replace `sales`) with migration/backfill/rollback.
-5. Transport recommendation after reading `src/lib/peripage.ts` and `print-station.tsx`.
-6. Go/no-go per item: review-branch push; merge to `master`; applying 0020; applying 0021 as-is (expected: **no** — to be revised).
-7. Open questions — only those that change implementation.
-
-## 13. Open questions for the owner
-1. Push the local commits to a review branch / draft PR now (backup + CI), yes or no?
-2. Order numbers: daily reset (e.g. `240924-003`) or running sequence?
-3. Bag label: hide prices by default?
-4. Is read-only production schema access available to the reviewer for the 0016 reconciliation?
+| Brief | Order header, number, instructions, time, payment status | Adopted (ORD-01, LBL-02/03) |
+| Brief | Two templates | Adopted (LBL-02) |
+| Brief | Status incl. sent/uncertain; never claim physical print | Adopted (PJ-04/06) |
+| Brief | Preserve job content | Adopted as immutable snapshot (PJ-02) |
+| Brief | Workflow B via USB driver | Reframed as hypotheses H3/H6–H9 |
+| Brief | Existing bridge vs custom helper | B4/B5 with criteria |
+| Brief | "Branding missing" | Refined: code deployed (`7c02231`), **inactive in prod until 0020** |
+| Reviewer | COM port ≠ compatible protocol | H4 |
+| Reviewer | Printer class ≠ no web printing | B3/H6/H8 |
+| Reviewer | Queue, pairing, recovery for iPhone→PC | WB-02–04; queue exists (§2.2) |
+| Reviewer | Order correctness before auto-print | Phases 3–4 precede 6 |
+| Reviewer | 0016 missing; don't recreate | §2.4 — found on `codex/delivery-today`; plus 0020 collision |
+| Reviewer | CI type-check accuracy | Corrected (§0, §8) |
+| Reviewer | Station/device binding from v1 | WB-02 (light), tokens deferred |
+| Reviewer | A6 switching iPhone ↔ Windows | H10, P-SWITCH |
+| Reviewer | Revised phase order; separate backup from release | §10, §11 |
+| Owner (v3 instruction) | Merge docs; evaluate Print Station first; hypotheses with sources & criteria; status matrix; migration checks; pre-merge checks; docs-only local commit | Done in this version |

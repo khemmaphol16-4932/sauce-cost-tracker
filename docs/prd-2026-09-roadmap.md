@@ -328,15 +328,46 @@ Workflow A (phase 5) and Workflow B (phase 6) remain independently testable and 
 **Go / no-go (current):**
 | Item | Status |
 |---|---|
-| Push to a review branch / Draft PR | Appropriate **when the owner authorises**; confirm deploy-preview settings |
+| Push to a review branch / Draft PR | **Declined by owner (2026-09-25) — review stays local.** Reviewers read the local repo or the patch package in `ordexa-review`; backup is a local `git bundle` there. Consequence: CI cannot run until something is pushed, so every §8 check that needs CI stays pending |
 | Merge to `master` | **No-go** |
 | Apply `0021` as written | **No-go** — revise per PJ-04–08 |
 | Apply `0020` (receipt profile) | **Undecided** — after prod schema check, 0016 reconciliation and 0020 renumbering |
 
-**Still open for the owner:**
-1. Authorise the review-branch / Draft PR push? (yes/no)
-2. Merge `codex/delivery-today` into the roadmap, and which home/navigation wins (Thai `/today` vs 5-tab phone nav)?
-3. Grant the reviewer read-only schema access as described above?
+**Owner decisions (2026-09-25):**
+1. Review-branch push: **no — keep review local** (above).
+2. Schema access: **approved**, read-only, structure + migration history only. Method: the **owner runs the queries in Appendix A** in the Supabase SQL editor and shares the output; no credentials are given to agents.
+3. `codex/delivery-today`: owner asked for an explanation before deciding — options in Appendix B.
+
+## Appendix A — read-only schema check (owner runs in the Supabase SQL editor)
+```sql
+-- 1. Migration history (may be empty if migrations were pasted into the SQL editor instead of run by the CLI)
+select version, name from supabase_migrations.schema_migrations order by version;
+
+-- 2. Which migrations' objects exist (structure only; no customer data is read)
+select table_name from information_schema.tables
+ where table_schema = 'public'
+   and table_name in ('delivery_orders','print_jobs','sale_ingredient_usage','cash_reconciliations','stock_adjustments')
+ order by 1;
+
+select table_name, column_name from information_schema.columns
+ where table_schema = 'public'
+   and ((table_name = 'recipes'    and column_name = 'is_made_to_order')
+     or (table_name = 'businesses' and column_name in ('logo_data_url','print_after_sale','print_target'))
+     or (table_name = 'sales'      and column_name = 'delivery_order_id'))
+ order by 1, 2;
+
+select event_object_table, trigger_name from information_schema.triggers
+ where trigger_schema = 'public' order by 1, 2;
+```
+Interpretation: `recipes.is_made_to_order` + table `sale_ingredient_usage` ⇒ 0016 applied · table `delivery_orders` ⇒ branch 0020 applied · `businesses.logo_data_url` ⇒ master 0020 applied · table `print_jobs` ⇒ 0021 applied.
+
+## Appendix B — what "merging `codex/delivery-today`" means
+The branch (Codex agent, 2026-09-13) adds a **made-to-order food line** (0016: a sale deducts ingredients directly, no batch step) and a Thai **`/today` delivery board** (orders from Grab / LINE MAN / direct → cooking → ready → delivered → booked as sales in one transaction). It was built on `66a5b4e`, **before** master's phone navigation, Sell cart, label printing and Print Station. Merging means renumbering its 0020, resolving conflicts in `tab-bar.tsx`, `nav.tsx`, `more/page.tsx`, `page.tsx`, `sales/actions.ts`, `proxy.ts`, and choosing one navigation:
+- **B1 — don't merge now:** keep the sauce-only scope; reuse only the PGlite test harness and the idempotent order/booking pattern.
+- **B2 — merge, `/today` becomes the home screen:** fits if the made-to-order / delivery food line is the main daily job.
+- **B3 — merge into the 5-tab bar (recommended if both lines are active):** Home = today summary; the **Sell** tab gets two modes — *Walk-in* (current cart) and *Orders* (the `/today` queue); a per-business setting picks the default (sauce business → Walk-in, food business → Orders).
+
+Deciding factor: does the owner run the made-to-order / Grab / LINE MAN business day to day?
 
 ## 15. Review log
 | Source | Point | Decision |

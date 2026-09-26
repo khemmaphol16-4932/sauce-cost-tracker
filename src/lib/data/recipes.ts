@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentBusinessId } from "@/lib/data/businesses";
 
@@ -8,7 +9,8 @@ export type RecipeSummary = {
   target_sell_price: number | null;
 };
 
-export async function getRecipes(): Promise<RecipeSummary[]> {
+// cache(): the Sell page calls this directly and again via getQuickSellDefaults.
+export const getRecipes = cache(async (): Promise<RecipeSummary[]> => {
   const supabase = await createClient();
   const businessId = await getCurrentBusinessId();
   const { data, error } = await supabase
@@ -18,7 +20,7 @@ export async function getRecipes(): Promise<RecipeSummary[]> {
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return data ?? [];
-}
+});
 
 export type RecipeDetail = {
   id: string;

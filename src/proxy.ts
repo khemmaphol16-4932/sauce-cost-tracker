@@ -25,9 +25,12 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() verifies the session JWT locally when the project uses
+  // asymmetric signing keys, saving an Auth-server round trip on every page
+  // load and every save; with legacy keys it falls back to the same network
+  // check getUser() did. Server actions still call getUser() before writing.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   const isPublicPath = PUBLIC_PATHS.some((path) => request.nextUrl.pathname.startsWith(path));
 

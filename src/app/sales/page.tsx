@@ -1,5 +1,5 @@
 import { getRecipes } from "@/lib/data/recipes";
-import { getSales, getQuickSellDefaults } from "@/lib/data/sales";
+import { getSales, getQuickSellDefaults, SALES_HISTORY_LIMIT } from "@/lib/data/sales";
 import { getReceiptProfile } from "@/lib/data/receipt-profile";
 import { getFinishedGoodsStock } from "@/lib/data/finished-goods";
 import { SellCart } from "./sell-cart";
@@ -52,6 +52,11 @@ export default async function SalesPage() {
               <SaleListRow key={s.id} sale={s} profile={profile} />
             ))}
           </ul>
+        )}
+        {sales.length === SALES_HISTORY_LIMIT && (
+          <p className="mt-2 text-center text-xs text-text-secondary">
+            Showing the latest {SALES_HISTORY_LIMIT} sales — older ones are in More → Export.
+          </p>
         )}
       </div>
     </div>

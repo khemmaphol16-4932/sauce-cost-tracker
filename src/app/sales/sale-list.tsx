@@ -39,8 +39,11 @@ export function SaleListRow({ sale, profile }: { sale: SaleRow; profile: Receipt
     });
   };
 
+  // A single history row is one recipe line, so it reprints as a receipt
+  // (items + prices + date) rather than a bag label.
   const receiptData = {
     ...profile,
+    kind: "receipt" as const,
     dateLabel: sale.sale_date,
     lines: [{ name: sale.recipe_name, qty: sale.qty_bottles, price: sale.price_charged_total }],
     total: sale.price_charged_total,

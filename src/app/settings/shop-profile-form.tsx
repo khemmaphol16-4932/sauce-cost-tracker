@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { updateShopProfile } from "./actions";
-import { renderReceiptFile, shareReceiptFile, type ReceiptData } from "@/lib/receipt";
+import { renderReceiptFile, shareReceiptFile, type ReceiptData, type SlipKind } from "@/lib/receipt";
 import type { ReceiptProfile } from "@/lib/data/receipt-profile";
 import { todayISO } from "@/lib/dates";
 
@@ -43,7 +43,9 @@ export function ShopProfileForm({ profile }: { profile: ReceiptProfile }) {
     phone: profile.phone ?? "",
     contactLine: profile.contactLine ?? "",
     footer: profile.footer ?? "",
+    feedbackUrl: profile.feedbackUrl ?? "",
   });
+  const [previewKind, setPreviewKind] = useState<SlipKind>("label");
   const [logo, setLogo] = useState<string>(profile.logoDataUrl ?? "");
   const [printAfterSale, setPrintAfterSale] = useState(profile.printAfterSale);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -52,6 +54,8 @@ export function ShopProfileForm({ profile }: { profile: ReceiptProfile }) {
   const [isPending, startTransition] = useTransition();
 
   const sample: ReceiptData = {
+    kind: previewKind,
+    feedbackUrl: /^https?:\/\//i.test(draft.feedbackUrl) ? draft.feedbackUrl : null,
     businessName: draft.name || "Your shop",
     logoDataUrl: logo || null,
     address: draft.address || null,
@@ -59,9 +63,12 @@ export function ShopProfileForm({ profile }: { profile: ReceiptProfile }) {
     contactLine: draft.contactLine || null,
     footer: draft.footer || null,
     dateLabel: todayISO(),
-    customerRef: "คุณนก",
-    lines: [{ name: "Example sauce", qty: 2, price: 178 }],
-    total: 178,
+    customerRef: "คุณนก · โซน B",
+    lines: [
+      { name: "Example set", qty: 1, price: 139 },
+      { name: "Extra tempura", qty: 2, price: 80 },
+    ],
+    total: 219,
   };
   const sampleKey = JSON.stringify(sample);
 
@@ -168,17 +175,33 @@ export function ShopProfileForm({ profile }: { profile: ReceiptProfile }) {
         </div>
         <div>
           <label htmlFor="receipt_footer" className="block text-sm font-medium text-text-secondary">
-            Thank-you message
+            Message at the bottom
           </label>
           <textarea
             id="receipt_footer"
             name="receipt_footer"
-            rows={2}
+            rows={4}
             value={draft.footer}
             onChange={set("footer")}
-            placeholder="ขอบคุณที่อุดหนุนนะคะ ♥"
+            placeholder={"เสียงของลูกค้าสำคัญที่สุด\nฝากคุณลูกค้าช่วยให้คะแนนความพึงพอใจ\nเพียงสแกน QR Code ด้านบนนี้ 🙏"}
             className="mt-1 field-input"
           />
+          <p className="mt-1 text-xs text-text-secondary">The first line prints bold, like a headline.</p>
+        </div>
+
+        <div>
+          <Field
+            label="Feedback link (printed as a QR code)"
+            name="feedback_url"
+            value={draft.feedbackUrl}
+            onChange={set("feedbackUrl")}
+            inputMode="url"
+            placeholder="https://forms.gle/…"
+          />
+          {profile.feedbackUrl && <input type="hidden" name="had_feedback_url" value="1" />}
+          <p className="mt-1 text-xs text-text-secondary">
+            e.g. a Google Form for ratings. Leave empty for no QR code.
+          </p>
         </div>
 
         <label className="flex min-h-11 items-center justify-between gap-3">
@@ -203,7 +226,21 @@ export function ShopProfileForm({ profile }: { profile: ReceiptProfile }) {
 
       <div className="card">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text">Label preview</h2>
+          <div className="flex gap-1 rounded-xl border border-border p-1">
+            {(["label", "receipt"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setPreviewKind(k)}
+                aria-pressed={previewKind === k}
+                className={`min-h-9 rounded-lg px-3 text-sm font-medium ${
+                  previewKind === k ? "bg-accent/15 text-accent" : "text-text-secondary"
+                }`}
+              >
+                {k === "label" ? "Label" : "Receipt"}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             onClick={testPrint}

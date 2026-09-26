@@ -24,10 +24,19 @@ export async function updateShopProfile(formData: FormData): Promise<ActionResul
   if (logo && !logo.startsWith("data:image/")) return { error: "Logo must be an image" };
   if (logo.length > MAX_LOGO_CHARS) return { error: "Logo is too large — try a simpler image" };
 
+  const feedbackUrl = text("feedback_url");
+  if (feedbackUrl && !/^https?:\/\//i.test(feedbackUrl)) {
+    return { error: "Feedback link must start with https://" };
+  }
+  if (feedbackUrl && feedbackUrl.length > 500) return { error: "Feedback link is too long" };
+
   const businessId = await getCurrentBusinessId();
   const { error } = await supabase
     .from("businesses")
     .update({
+      // Only sent when set, so shops without a QR link can still save
+      // before migration 0021 has been applied.
+      ...(feedbackUrl || formData.get("had_feedback_url") === "1" ? { feedback_url: feedbackUrl } : {}),
       name,
       logo_data_url: logo || null,
       address: text("address"),
@@ -39,7 +48,11 @@ export async function updateShopProfile(formData: FormData): Promise<ActionResul
     .eq("id", businessId);
   if (error) {
     if (error.message.includes("column")) {
-      return { error: "Database update 0020 hasn't been applied yet — run it in Supabase first" };
+      return {
+        error: error.message.includes("feedback_url")
+          ? "Database update 0021 hasn't been applied yet — run it in Supabase to save the QR link"
+          : "Database update 0020 hasn't been applied yet — run it in Supabase first",
+      };
     }
     return { error: error.message };
   }

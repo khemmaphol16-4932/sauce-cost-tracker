@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Kanit } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -10,6 +10,15 @@ const inter = Inter({
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   subsets: ["latin"],
+});
+
+// Only used by the printed label/receipt canvas (src/lib/receipt.ts), which
+// reads --font-kanit. preload: false so ordinary pages don't download it.
+const kanit = Kanit({
+  variable: "--font-kanit",
+  subsets: ["thai", "latin"],
+  weight: ["400", "600"],
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -37,7 +46,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${jetbrainsMono.variable} ${kanit.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

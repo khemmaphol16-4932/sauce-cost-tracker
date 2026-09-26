@@ -6,20 +6,39 @@ import { logCartSale } from "./actions";
 import { PAYMENT_METHODS, PLATFORM_OPTIONS } from "@/lib/platforms";
 import type { QuickSellDefaults } from "@/lib/data/sales";
 import type { ReceiptProfile } from "@/lib/data/receipt-profile";
-import { renderReceiptFile, shareReceiptFile } from "@/lib/receipt";
+import { renderReceiptFile, shareReceiptFile, type SlipKind } from "@/lib/receipt";
+import { enqueueSlip, removeSlips } from "@/lib/print-queue";
 import { todayISO } from "@/lib/dates";
+import { PrintQueue } from "./print-queue";
 
 export type SellTile = QuickSellDefaults & { inStock: number | null };
 
 const LAST_PLATFORM_KEY = "ordexa_last_platform";
+const SLIP_KIND_KEY = "ordexa_slip_kind";
+
+function savedSlipKind(): SlipKind {
+  try {
+    return localStorage.getItem(SLIP_KIND_KEY) === "receipt" ? "receipt" : "label";
+  } catch {
+    return "label";
+  }
+}
 
 // Tap a tile = +1 bottle. A bar pinned above the tab bar shows the running
 // total; Checkout opens one sheet for platform, payment, and an optional
 // adjusted total. A common sale is two taps instead of tile → qty → submit.
-// After a sale the sheet switches to a "Print label" step: the receipt image
-// is rendered while the sale saves, so the tap that prints can open the Share
-// Sheet (→ PeriPage app) immediately — iOS refuses it after an await.
-type Printable = { file: File; customer: string; bottles: number; total: number };
+// After a sale its label joins the on-phone print queue, and the sheet
+// offers "Print now" (for a customer waiting) or "Later" (batch it). The
+// image is rendered while the sale saves, so the Print now tap can open the
+// Share Sheet immediately — iOS refuses it after an await.
+type Printable = {
+  file: File;
+  queuedId: string;
+  kind: SlipKind;
+  customer: string;
+  bottles: number;
+  total: number;
+};
 
 export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: ReceiptProfile }) {
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -30,6 +49,7 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
   const [totalOverride, setTotalOverride] = useState<string>("");
   const [showExtra, setShowExtra] = useState(profile.printAfterSale);
   const [printable, setPrintable] = useState<Printable | null>(null);
+  const [slipKind, setSlipKind] = useState<SlipKind>("label");
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -105,11 +125,26 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
     setPrintable(null);
   };
 
-  const printLabel = () => {
+  const chooseSlipKind = (kind: SlipKind) => {
+    setSlipKind(kind);
+    try {
+      localStorage.setItem(SLIP_KIND_KEY, kind);
+    } catch {
+      // ignore
+    }
+  };
+
+  const printNow = () => {
     if (!printable) return;
-    shareReceiptFile(printable.file, profile.businessName).catch(() =>
-      setError("Couldn't open the print sheet — use Print in Sales history instead")
-    );
+    const { file, queuedId } = printable;
+    shareReceiptFile(file, profile.businessName)
+      .then((result) => {
+        if (result === "shared") {
+          removeSlips([queuedId]);
+          closeCheckout();
+        }
+      })
+      .catch(() => setError("Couldn't open the print sheet — use Print all on the Sell page instead"));
   };
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -140,18 +175,21 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
     formData.set("payment_method", paymentMethod);
 
     const customer = String(formData.get("customer_ref") ?? "").trim();
+    const kind = slipKind;
+    const slip = {
+      kind,
+      businessName: profile.businessName,
+      dateLabel: todayISO(),
+      customerRef: customer || null,
+      lines: payload.map((p, i) => ({
+        name: lines[i].tile.recipeName,
+        qty: p.qty_bottles,
+        price: p.price_charged_total,
+      })),
+      total: chargedTotal,
+    };
     const receiptPromise = profile.printAfterSale
-      ? renderReceiptFile({
-          ...profile,
-          dateLabel: todayISO(),
-          lines: payload.map((p, i) => ({
-            name: lines[i].tile.recipeName,
-            qty: p.qty_bottles,
-            price: p.price_charged_total,
-          })),
-          total: chargedTotal,
-          customerRef: customer || null,
-        }).catch(() => null)
+      ? renderReceiptFile({ ...profile, ...slip }).catch(() => null)
       : Promise.resolve(null);
 
     setError(null);
@@ -166,9 +204,11 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
       } catch {
         // ignore
       }
+      // Queue first, so the label is never lost even if the sheet is closed.
+      const queued = profile.printAfterSale ? enqueueSlip(slip) : null;
       const file = await receiptPromise;
-      if (file) {
-        setPrintable({ file, customer, bottles: bottleCount, total: chargedTotal });
+      if (file && queued) {
+        setPrintable({ file, queuedId: queued.id, kind, customer, bottles: bottleCount, total: chargedTotal });
       } else {
         setToast(`Sold ${bottleCount} bottle${bottleCount === 1 ? "" : "s"} · ฿${chargedTotal.toFixed(0)}`);
         setCheckoutOpen(false);
@@ -179,6 +219,11 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
 
   return (
     <>
+      {profile.printAfterSale && (
+        <div className="mb-3">
+          <PrintQueue profile={profile} />
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {tiles.map((t) => {
           const qty = cart[t.recipeId] ?? 0;
@@ -233,6 +278,7 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
               type="button"
               onClick={() => {
                 setError(null);
+                setSlipKind(savedSlipKind());
                 setCheckoutOpen(true);
               }}
               className="flex min-h-12 flex-1 items-center justify-between rounded-xl bg-accent px-4 text-base font-semibold text-[#121212]"
@@ -263,11 +309,11 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
                 </>
               )}
             </p>
-            <button type="button" onClick={printLabel} className="min-h-14 w-full btn-primary">
-              Print label
+            <button type="button" onClick={printNow} className="min-h-14 w-full btn-primary">
+              Print {printable.kind === "receipt" ? "receipt" : "label"} now
             </button>
             <p className="text-center text-xs text-text-secondary">
-              Opens the share sheet — choose PeriPage to print.
+              Tap <b>Save Image</b>, then in PeriPage print it from Photos.
             </p>
             {error && <p className="text-sm text-alert">{error}</p>}
             <button
@@ -275,7 +321,7 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
               onClick={closeCheckout}
               className="min-h-12 w-full rounded-xl border border-border text-base font-medium text-text"
             >
-              Done
+              Later — add to Print all
             </button>
           </div>
         ) : (
@@ -355,11 +401,25 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
             />
           </div>
 
+          {profile.printAfterSale && (
+            <fieldset>
+              <legend className="mb-2 text-sm font-medium text-text-secondary">Print</legend>
+              <div className="flex flex-wrap gap-2">
+                <Chip active={slipKind === "label"} onClick={() => chooseSlipKind("label")}>
+                  Bag label
+                </Chip>
+                <Chip active={slipKind === "receipt"} onClick={() => chooseSlipKind("receipt")}>
+                  Receipt (with prices)
+                </Chip>
+              </div>
+            </fieldset>
+          )}
+
           {showExtra ? (
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-text-secondary">
-                  Customer name {profile.printAfterSale ? "(printed on the label)" : "/ room (optional)"}
+                  {profile.printAfterSale ? "Name / zone (printed on the label)" : "Customer name / room (optional)"}
                 </label>
                 <input name="customer_ref" autoComplete="off" className="mt-1 field-input" />
               </div>

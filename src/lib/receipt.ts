@@ -6,8 +6,9 @@
 // image the PeriPage app prints is the only path. Falls back to a plain
 // download where file sharing isn't available (desktop browsers).
 //
-// Two layouts share one frame (the owner's paper template):
-//   label   — logo, customer name/zone, total, feedback QR, message
+// Two layouts share one frame (the owner's paper template, v2):
+//   label   — logo, Name ___ Zone ___, Note (2 lines), Total ___ บาท,
+//             feedback QR, message, arrow cut lines top and bottom
 //   receipt — the same, plus each item with its price and the date
 // Several slips can be stacked into one tall image so a batch prints in a
 // single Save Image + one PeriPage print.
@@ -16,10 +17,12 @@ import qrcode from "qrcode-generator";
 
 const RECEIPT_WIDTH = 384; // logical px = PeriPage A6 print width in dots (48mm @ 203dpi)
 const SCALE = 2; // render at 2x for a crisper image; PeriPage scales to its width
-const PADDING = 20;
+// Wide side margins: PeriPage doesn't print edge to edge, and at 20px the
+// first version ran off the paper on the owner's printer.
+const PADDING = 34;
 const LINE_HEIGHT = 26;
-const MAX_LOGO_HEIGHT = 300;
-const QR_SIZE = 190;
+const MAX_LOGO_HEIGHT = 170;
+const QR_SIZE = 150;
 // Thermal heads print only black or white; grey anti-aliasing turns into
 // speckle. Everything darker than this becomes solid black.
 const INK_THRESHOLD = 170;
@@ -37,7 +40,8 @@ export type ReceiptData = {
   dateLabel: string;
   lines: ReceiptLine[];
   total: number;
-  customerRef?: string | null;
+  customerRef?: string | null; // "Name / Zone" — see splitNameZone
+  note?: string | null;
   logoDataUrl?: string | null;
   address?: string | null;
   phone?: string | null;
@@ -125,6 +129,20 @@ const money = (n: number) =>
 
 type SlipAssets = { font: string; logo: HTMLImageElement | null };
 
+/** customer_ref is one column; the Sell cart stores "Name / Zone". */
+export function splitNameZone(ref: string | null | undefined): { name: string; zone: string } {
+  const value = (ref ?? "").trim();
+  const at = value.indexOf(" / ");
+  if (at < 0) return { name: value, zone: "" };
+  return { name: value.slice(0, at).trim(), zone: value.slice(at + 3).trim() };
+}
+
+export function joinNameZone(name: string, zone: string): string {
+  const n = name.trim();
+  const z = zone.trim();
+  return z ? `${n} / ${z}` : n;
+}
+
 // Draws one slip starting at `top` (logical px) and returns the y where it ends.
 function drawSlip(ctx: CanvasRenderingContext2D, data: ReceiptData, top: number, assets: SlipAssets): number {
   const { font, logo } = assets;
@@ -137,122 +155,140 @@ function drawSlip(ctx: CanvasRenderingContext2D, data: ReceiptData, top: number,
 
   ctx.fillStyle = "#000000";
   ctx.strokeStyle = "#000000";
-  ctx.textBaseline = "top";
+  ctx.textBaseline = "alphabetic";
 
-  const centered = (text: string, f: string, lineHeight = LINE_HEIGHT) => {
+  const line = (x1: number, x2: number, atY: number, width = 1.5) => {
+    ctx.lineWidth = width;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x1, atY);
+    ctx.lineTo(x2, atY);
+    ctx.stroke();
+  };
+
+  // Value written on a blank, centred between x1 and x2 and cut to fit.
+  const fillBlank = (text: string, x1: number, x2: number, baseline: number, f: string) => {
+    if (!text) return;
     ctx.font = f;
     ctx.textAlign = "center";
-    for (const line of wrap(ctx, text, contentWidth)) {
-      ctx.fillText(line, center, y);
+    ctx.fillText(truncate(ctx, text, x2 - x1 - 4), (x1 + x2) / 2, baseline);
+  };
+
+  const centered = (text: string, f: string, lineHeight: number) => {
+    ctx.font = f;
+    ctx.textAlign = "center";
+    for (const l of wrap(ctx, text, contentWidth)) {
       y += lineHeight;
+      ctx.fillText(l, center, y - lineHeight * 0.25);
     }
   };
 
-  const rule = (style: "solid" | "dashed", gapAfter = 14) => {
-    ctx.lineWidth = style === "solid" ? 2 : 1.5;
-    ctx.setLineDash(style === "dashed" ? [8, 5] : []);
+  // Dotted cut line with arrowheads at both ends, as on the template.
+  const arrowRule = () => {
+    const x1 = left - 12;
+    const x2 = right + 12;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([2, 4]);
     ctx.beginPath();
-    ctx.moveTo(left, y);
-    ctx.lineTo(right, y);
+    ctx.moveTo(x1 + 8, y);
+    ctx.lineTo(x2 - 8, y);
     ctx.stroke();
     ctx.setLineDash([]);
-    y += gapAfter;
+    for (const [tip, dir] of [[x1, 1], [x2, -1]] as const) {
+      ctx.beginPath();
+      ctx.moveTo(tip, y);
+      ctx.lineTo(tip + 9 * dir, y - 5);
+      ctx.lineTo(tip + 9 * dir, y + 5);
+      ctx.closePath();
+      ctx.fill();
+    }
   };
 
-  // Cut line with a heart in the middle, like the paper template's last row.
-  const heartRule = () => {
-    ctx.font = `600 18px ${font}`;
-    ctx.textAlign = "center";
-    const heartWidth = ctx.measureText("♥").width + 16;
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([8, 5]);
-    ctx.beginPath();
-    ctx.moveTo(left, y + 9);
-    ctx.lineTo(center - heartWidth / 2, y + 9);
-    ctx.moveTo(center + heartWidth / 2, y + 9);
-    ctx.lineTo(right, y + 9);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillText("♥", center, y);
-    y += 22;
-  };
+  const LABEL = `600 23px ${font}`;
+  const VALUE = `600 21px ${font}`;
 
-  const heading = (text: string) => {
-    ctx.font = `600 20px ${font}`;
-    ctx.textAlign = "left";
-    ctx.fillText(text, left, y);
-    y += 36;
-  };
-
-  rule("dashed", 18);
+  y += 8;
+  arrowRule();
+  y += 22;
 
   if (logo) {
-    const ratio = Math.min(contentWidth / logo.width, MAX_LOGO_HEIGHT / logo.height);
+    const ratio = Math.min((contentWidth * 0.62) / logo.width, MAX_LOGO_HEIGHT / logo.height);
     const w = logo.width * ratio;
     const h = logo.height * ratio;
     ctx.drawImage(logo, center - w / 2, y, w, h);
-    y += h + 12;
+    y += h + 8;
   } else {
     // No logo uploaded yet: the shop name stands in for it.
-    y += 8;
-    centered(data.businessName, `600 32px ${font}`, 42);
-    y += 6;
+    centered(data.businessName, `600 30px ${font}`, 42);
   }
   const contact = [data.phone, data.contactLine].filter(Boolean).join("  ·  ");
   if (data.address) centered(data.address, `400 14px ${font}`, 20);
   if (contact) centered(contact, `400 14px ${font}`, 20);
+  y += 18;
 
-  y += 6;
-  rule("dashed", 18);
-
-  heading("คุณ (Name) / โซน (Zone):");
-  if (data.customerRef) {
-    centered(data.customerRef, `600 30px ${font}`, 40);
-    y += 4;
-  } else {
-    // Blank for handwriting, as on the paper version.
-    y += 26;
-    rule("dashed", 30);
-  }
-  rule("solid", 18);
+  // Name ________ Zone ______
+  const { name, zone } = splitNameZone(data.customerRef);
+  y += 26;
+  ctx.font = LABEL;
+  ctx.textAlign = "left";
+  const zoneX = left + contentWidth * 0.66;
+  ctx.fillText("Name", left, y);
+  const nameStart = left + ctx.measureText("Name").width + 4;
+  ctx.fillText("Zone", zoneX, y);
+  const zoneStart = zoneX + ctx.measureText("Zone").width + 4;
+  line(nameStart, zoneX - 6, y + 2);
+  line(zoneStart, right, y + 2);
+  fillBlank(name, nameStart, zoneX - 6, y - 3, VALUE);
+  fillBlank(zone, zoneStart, right, y - 3, VALUE);
+  y += 22;
 
   if (kind === "receipt") {
     ctx.font = `400 16px ${font}`;
-    for (const line of data.lines.length > 0 ? data.lines : [{ name: "—", qty: 0, price: 0 }]) {
-      const priceLabel = money(line.price);
+    for (const item of data.lines.length > 0 ? data.lines : [{ name: "—", qty: 0, price: 0 }]) {
+      y += LINE_HEIGHT;
+      const priceLabel = money(item.price);
       const priceWidth = ctx.measureText(priceLabel).width;
       ctx.textAlign = "left";
-      ctx.fillText(truncate(ctx, `${line.qty} × ${line.name}`, contentWidth - priceWidth - 10), left, y);
+      ctx.fillText(truncate(ctx, `${item.qty} × ${item.name}`, contentWidth - priceWidth - 10), left, y);
       ctx.textAlign = "right";
       ctx.fillText(priceLabel, right, y);
-      y += LINE_HEIGHT;
     }
-    y += 4;
-    rule("dashed", 18);
+    y += 10;
   }
 
-  heading("ยอดรวม (Total):");
-  ctx.font = `600 30px ${font}`;
+  // หมายเหตุ (Note) + two writing lines, the note (if any) written on them.
+  y += 30;
+  ctx.font = LABEL;
+  ctx.textAlign = "left";
+  ctx.fillText("หมายเหตุ (Note)", left, y);
+  ctx.font = `400 18px ${font}`;
+  const noteLines = data.note ? wrap(ctx, data.note, contentWidth - 8).slice(0, 2) : [];
+  for (let i = 0; i < 2; i++) {
+    y += 42;
+    line(left, right, y, i === 0 ? 1 : 1.5);
+    if (noteLines[i]) {
+      ctx.textAlign = "left";
+      ctx.fillText(noteLines[i], left + 4, y - 7);
+    }
+  }
+  y += 16;
+
+  // ยอดรวม (Total) ________ บาท
+  y += 34;
+  ctx.font = LABEL;
+  ctx.textAlign = "left";
+  const totalLabel = "ยอดรวม (Total)";
+  ctx.fillText(totalLabel, left, y);
+  const totalStart = left + ctx.measureText(totalLabel).width + 6;
   ctx.textAlign = "right";
-  const baht = "บาท";
-  const bahtWidth = ctx.measureText(baht).width;
-  ctx.fillText(baht, right, y);
-  ctx.textAlign = "center";
-  ctx.fillText(money(data.total), left + (contentWidth - bahtWidth - 12) / 2, y);
-  y += 40;
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([3, 3]);
-  ctx.beginPath();
-  ctx.moveTo(left, y);
-  ctx.lineTo(right - bahtWidth - 12, y);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  y += 14;
-  rule("solid", 22);
+  ctx.fillText("บาท", right, y);
+  const totalEnd = right - ctx.measureText("บาท").width - 4;
+  line(totalStart, totalEnd, y + 2);
+  fillBlank(money(data.total), totalStart, totalEnd, y - 3, VALUE);
+  y += 18;
 
   if (kind === "receipt") {
     centered(data.dateLabel, `400 13px ${font}`, 20);
-    y += 8;
   }
 
   if (data.feedbackUrl) {
@@ -269,21 +305,16 @@ function drawSlip(ctx: CanvasRenderingContext2D, data: ReceiptData, top: number,
         if (qr.isDark(r, c)) ctx.fillRect(x0 + c * cell, y + r * cell, cell, cell);
       }
     }
-    y += size + 18;
+    y += size + 6;
   }
 
-  // Message: first line bold as a headline, the rest regular — matches the
-  // template's "เสียงของลูกค้าสำคัญที่สุด" block.
   if (data.footer) {
-    const [first, ...rest] = data.footer.split(/\r?\n/);
-    if (first.trim()) centered(first.trim(), `600 17px ${font}`, 26);
-    if (rest.join("\n").trim()) centered(rest.join("\n").trim(), `400 15px ${font}`, 22);
-    y += 10;
+    centered(data.footer.trim(), `600 19px ${font}`, 28);
   }
 
-  y += 6;
-  heartRule();
-  return y + 8;
+  y += 16;
+  arrowRule();
+  return y + 10;
 }
 
 // Converts anti-aliased grey to pure black/white for the thermal head.

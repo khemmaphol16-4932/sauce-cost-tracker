@@ -7,7 +7,7 @@ import { logCartSale } from "./actions";
 import { PAYMENT_METHODS, PLATFORM_OPTIONS } from "@/lib/platforms";
 import type { QuickSellDefaults } from "@/lib/data/sales";
 import type { ReceiptProfile } from "@/lib/data/receipt-profile";
-import { renderReceiptFile, shareReceiptFile, type SlipKind } from "@/lib/receipt";
+import { joinNameZone, renderReceiptFile, shareReceiptFile, type SlipKind } from "@/lib/receipt";
 import { enqueueSlip, removeSlips } from "@/lib/print-queue";
 import { todayISO } from "@/lib/dates";
 import { PrintQueue } from "./print-queue";
@@ -176,13 +176,20 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
     formData.set("platform_fee_pct", String(feePct));
     formData.set("payment_method", paymentMethod);
 
-    const customer = String(formData.get("customer_ref") ?? "").trim();
+    // Name and Zone are separate boxes but one customer_ref column ("Name / Zone").
+    const customer = joinNameZone(
+      String(formData.get("customer_name") ?? ""),
+      String(formData.get("customer_zone") ?? "")
+    );
+    formData.set("customer_ref", customer);
+    const note = String(formData.get("notes") ?? "").trim();
     const kind = slipKind;
     const slip = {
       kind,
       businessName: profile.businessName,
       dateLabel: todayISO(),
       customerRef: customer || null,
+      note: note || null,
       lines: payload.map((p, i) => ({
         name: lines[i].tile.recipeName,
         qty: p.qty_bottles,
@@ -422,14 +429,20 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
 
           {showExtra ? (
             <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary">
-                  {profile.printAfterSale ? "Name / zone (printed on the label)" : "Customer name / room (optional)"}
-                </label>
-                <input name="customer_ref" autoComplete="off" className="mt-1 field-input" />
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-text-secondary">Name</label>
+                  <input name="customer_name" autoComplete="off" className="mt-1 field-input" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary">Zone</label>
+                  <input name="customer_zone" autoComplete="off" className="mt-1 field-input" />
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-text-secondary">Notes (optional)</label>
+                <label className="block text-sm font-medium text-text-secondary">
+                  Note {profile.printAfterSale ? "(printed on the label)" : "(optional)"}
+                </label>
                 <textarea name="notes" rows={2} className="mt-1 field-input" />
               </div>
             </div>

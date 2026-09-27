@@ -61,6 +61,7 @@ function SaleListRow({ sale, profile }: { sale: SaleRow; profile: ReceiptProfile
     lines: [{ name: sale.recipe_name, qty: sale.qty_bottles, price: sale.price_charged_total }],
     total: sale.price_charged_total,
     customerRef: sale.customer_ref,
+    note: sale.notes,
   };
 
   return (

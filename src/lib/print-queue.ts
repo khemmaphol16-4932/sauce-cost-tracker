@@ -24,6 +24,7 @@ export type QueuedSlip = {
   businessName: string; // the shop it was sold under, to avoid mixing shops in one batch
   dateLabel: string;
   customerRef: string | null;
+  note?: string | null; // absent on slips queued before notes were printed
   lines: ReceiptLine[];
   total: number;
 };

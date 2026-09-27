@@ -63,7 +63,8 @@ export function ShopProfileForm({ profile }: { profile: ReceiptProfile }) {
     contactLine: draft.contactLine || null,
     footer: draft.footer || null,
     dateLabel: todayISO(),
-    customerRef: "คุณนก · โซน B",
+    customerRef: "คุณนก / B",
+    note: "ไม่ใส่ผัก เผ็ดน้อย",
     lines: [
       { name: "Example set", qty: 1, price: 139 },
       { name: "Extra tempura", qty: 2, price: 80 },
@@ -183,10 +184,10 @@ export function ShopProfileForm({ profile }: { profile: ReceiptProfile }) {
             rows={4}
             value={draft.footer}
             onChange={set("footer")}
-            placeholder={"เสียงของลูกค้าสำคัญที่สุด\nฝากคุณลูกค้าช่วยให้คะแนนความพึงพอใจ\nเพียงสแกน QR Code ด้านบนนี้ 🙏"}
+            placeholder={"เสียงของลูกค้าสำคัญที่สุด\nสแกน QR เพื่อให้คะแนนความพึงพอใจ\nขอบคุณที่อุดหนุนครัวบ้านจิ้ม"}
             className="mt-1 field-input"
           />
-          <p className="mt-1 text-xs text-text-secondary">The first line prints bold, like a headline.</p>
+          <p className="mt-1 text-xs text-text-secondary">Printed under the QR code. Avoid emoji — they print as blobs.</p>
         </div>
 
         <div>

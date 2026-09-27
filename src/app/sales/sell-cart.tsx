@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Modal } from "@/components/modal";
 import { logCartSale } from "./actions";
 import { PAYMENT_METHODS, PLATFORM_OPTIONS } from "@/lib/platforms";
@@ -53,6 +54,7 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   // Remember the channel this phone last sold on — per-device convenience only.
   useEffect(() => {
@@ -204,6 +206,9 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
       } catch {
         // ignore
       }
+      // Stock counts and history catch up in the background — the action no
+      // longer rebuilds this page before returning (see logCartSale).
+      setTimeout(() => router.refresh(), 0);
       // Queue first, so the label is never lost even if the sheet is closed.
       const queued = profile.printAfterSale ? enqueueSlip(slip) : null;
       const file = await receiptPromise;

@@ -4,7 +4,7 @@ import { getReceiptProfile } from "@/lib/data/receipt-profile";
 import { getFinishedGoodsStock } from "@/lib/data/finished-goods";
 import { SellCart } from "./sell-cart";
 import { SaleForm } from "./sale-form";
-import { SaleListRow } from "./sale-list";
+import { SaleList } from "./sale-list";
 
 export default async function SalesPage() {
   const [recipes, sales, quickSellDefaults, profile, finishedGoods] = await Promise.all([
@@ -47,11 +47,7 @@ export default async function SalesPage() {
         {sales.length === 0 ? (
           <p className="py-4 text-center text-sm text-text-secondary">No sales logged yet.</p>
         ) : (
-          <ul className="rounded-2xl border border-border bg-surface px-4 shadow-sm">
-            {sales.map((s) => (
-              <SaleListRow key={s.id} sale={s} profile={profile} />
-            ))}
-          </ul>
+          <SaleList sales={sales} profile={profile} />
         )}
         {sales.length === SALES_HISTORY_LIMIT && (
           <p className="mt-2 text-center text-xs text-text-secondary">

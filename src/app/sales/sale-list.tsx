@@ -14,7 +14,20 @@ const STATUS_STYLES: Record<string, string> = {
   refunded: "bg-alert-bg text-alert",
 };
 
-export function SaleListRow({ sale, profile }: { sale: SaleRow; profile: ReceiptProfile }) {
+// The profile carries the logo as a data URL (up to a few hundred KB). Passing
+// it from the server page to each row would serialize it per row — up to 100
+// copies in every Sell page payload — so the list is one client component.
+export function SaleList({ sales, profile }: { sales: SaleRow[]; profile: ReceiptProfile }) {
+  return (
+    <ul className="rounded-2xl border border-border bg-surface px-4 shadow-sm">
+      {sales.map((s) => (
+        <SaleListRow key={s.id} sale={s} profile={profile} />
+      ))}
+    </ul>
+  );
+}
+
+function SaleListRow({ sale, profile }: { sale: SaleRow; profile: ReceiptProfile }) {
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isPending, startTransition] = useTransition();

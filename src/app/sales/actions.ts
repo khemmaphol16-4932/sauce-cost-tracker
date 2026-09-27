@@ -9,13 +9,16 @@ import { todayISO } from "@/lib/dates";
 
 type ActionResult = { error: string } | undefined;
 
+// getClaims() verifies the session JWT locally when the project uses
+// asymmetric signing keys (falling back to the Auth server otherwise), so the
+// hot Sell path doesn't pay an extra network round trip per save. RLS still
+// checks auth.uid() on every write.
 async function requireUser() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
-  return { supabase, user };
+  const { data } = await supabase.auth.getClaims();
+  const userId = data?.claims?.sub;
+  if (!userId) throw new Error("Not authenticated");
+  return { supabase, user: { id: userId } };
 }
 
 export async function logSale(formData: FormData): Promise<ActionResult> {
@@ -79,7 +82,6 @@ type CartLine = { recipe_id: string; qty_bottles: number; price_charged_total: n
 // per-row stock trigger either deducts all of them or none — no half-logged
 // cart if one recipe is short on bottles.
 export async function logCartSale(formData: FormData): Promise<ActionResult> {
-  const { supabase, user } = await requireUser();
 
   let lines: CartLine[];
   try {
@@ -102,8 +104,12 @@ export async function logCartSale(formData: FormData): Promise<ActionResult> {
   const customerRef = String(formData.get("customer_ref") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
 
-  const details = await Promise.all(lines.map((l) => getRecipeDetail(l.recipe_id)));
-  const businessId = await getCurrentBusinessId();
+  // Auth, recipes and business lookups are independent — one round trip, not three.
+  const [{ supabase, user }, details, businessId] = await Promise.all([
+    requireUser(),
+    Promise.all(lines.map((l) => getRecipeDetail(l.recipe_id))),
+    getCurrentBusinessId(),
+  ]);
   const saleDate = todayISO();
 
   const rows = [];
@@ -135,7 +141,10 @@ export async function logCartSale(formData: FormData): Promise<ActionResult> {
   const { error } = await supabase.from("sales").insert(rows);
   if (error) return { error: error.message };
 
-  revalidatePath("/sales");
+  // Deliberately not revalidating /sales: from a Server Action that re-renders
+  // the page the operator is on *before* the action returns, so "Sold ✓" waited
+  // on a full page rebuild. The Sell cart refreshes itself in the background
+  // after showing success instead. These only mark other pages stale (cheap).
   revalidatePath("/stock");
   revalidatePath("/dashboard");
   revalidatePath("/closing");

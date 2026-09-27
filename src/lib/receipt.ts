@@ -7,8 +7,8 @@
 // download where file sharing isn't available (desktop browsers).
 //
 // Two layouts share one frame (the owner's paper template, v2):
-//   label   — logo, Name ___ Zone ___, Note (2 lines), Total ___ บาท,
-//             feedback QR, message, arrow cut lines top and bottom
+//   label   — logo centred at the very top, Name ___ Zone ___, Note (2 lines),
+//             Total ___ บาท, feedback QR, message, arrow cut line at the bottom
 //   receipt — the same, plus each item with its price and the date
 // Several slips can be stacked into one tall image so a batch prints in a
 // single Save Image + one PeriPage print.
@@ -28,7 +28,9 @@ const QR_SIZE = 150;
 const INK_THRESHOLD = 170;
 // iOS caps canvas area (~16.7M px), so a batch image holds at most this many slips.
 export const SLIPS_PER_IMAGE = 5;
-const FALLBACK_FONT = '"Kanit", "Sarabun", "Noto Sans Thai", "Leelawadee UI", Tahoma, sans-serif';
+const FALLBACK_FONT = '"Mali", "Sarabun", "Noto Sans Thai", "Leelawadee UI", Tahoma, sans-serif';
+// Mali Medium for every line (owner's choice); size alone sets the hierarchy.
+const WEIGHT = 500;
 
 export type SlipKind = "label" | "receipt";
 
@@ -57,20 +59,17 @@ type ShareableNavigator = Navigator & {
   share?: (data: { files?: File[]; title?: string }) => Promise<void>;
 };
 
-// Kanit is loaded by next/font in the root layout under a hashed family name,
-// exposed as --font-kanit. Canvas silently falls back to a system font if the
+// Mali is loaded by next/font in the root layout under a hashed family name,
+// exposed as --font-mali. Canvas silently falls back to a system font if the
 // face isn't loaded yet, so load it explicitly before the first draw.
 let fontPromise: Promise<string> | null = null;
 function loadSlipFont(): Promise<string> {
   if (!fontPromise) {
     fontPromise = (async () => {
-      const kanit = getComputedStyle(document.documentElement).getPropertyValue("--font-kanit").trim();
-      const family = kanit ? `${kanit}, ${FALLBACK_FONT}` : FALLBACK_FONT;
+      const mali = getComputedStyle(document.documentElement).getPropertyValue("--font-mali").trim();
+      const family = mali ? `${mali}, ${FALLBACK_FONT}` : FALLBACK_FONT;
       try {
-        await Promise.all([
-          document.fonts.load(`400 16px ${family}`, "คุณ Name 0"),
-          document.fonts.load(`600 16px ${family}`, "คุณ Name 0"),
-        ]);
+        await document.fonts.load(`${WEIGHT} 16px ${family}`, "คุณ Name 0");
       } catch {
         // offline or blocked — the system Thai font still prints legibly
       }
@@ -204,12 +203,10 @@ function drawSlip(ctx: CanvasRenderingContext2D, data: ReceiptData, top: number,
     }
   };
 
-  const LABEL = `600 23px ${font}`;
-  const VALUE = `600 21px ${font}`;
+  const LABEL = `${WEIGHT} 23px ${font}`;
+  const VALUE = `${WEIGHT} 21px ${font}`;
 
-  y += 8;
-  arrowRule();
-  y += 22;
+  y += 14;
 
   if (logo) {
     const ratio = Math.min((contentWidth * 0.62) / logo.width, MAX_LOGO_HEIGHT / logo.height);
@@ -219,11 +216,11 @@ function drawSlip(ctx: CanvasRenderingContext2D, data: ReceiptData, top: number,
     y += h + 8;
   } else {
     // No logo uploaded yet: the shop name stands in for it.
-    centered(data.businessName, `600 30px ${font}`, 42);
+    centered(data.businessName, `${WEIGHT} 30px ${font}`, 42);
   }
   const contact = [data.phone, data.contactLine].filter(Boolean).join("  ·  ");
-  if (data.address) centered(data.address, `400 14px ${font}`, 20);
-  if (contact) centered(contact, `400 14px ${font}`, 20);
+  if (data.address) centered(data.address, `${WEIGHT} 14px ${font}`, 20);
+  if (contact) centered(contact, `${WEIGHT} 14px ${font}`, 20);
   y += 18;
 
   // Name ________ Zone ______
@@ -243,7 +240,7 @@ function drawSlip(ctx: CanvasRenderingContext2D, data: ReceiptData, top: number,
   y += 22;
 
   if (kind === "receipt") {
-    ctx.font = `400 16px ${font}`;
+    ctx.font = `${WEIGHT} 16px ${font}`;
     for (const item of data.lines.length > 0 ? data.lines : [{ name: "—", qty: 0, price: 0 }]) {
       y += LINE_HEIGHT;
       const priceLabel = money(item.price);
@@ -261,7 +258,7 @@ function drawSlip(ctx: CanvasRenderingContext2D, data: ReceiptData, top: number,
   ctx.font = LABEL;
   ctx.textAlign = "left";
   ctx.fillText("หมายเหตุ (Note)", left, y);
-  ctx.font = `400 18px ${font}`;
+  ctx.font = `${WEIGHT} 18px ${font}`;
   const noteLines = data.note ? wrap(ctx, data.note, contentWidth - 8).slice(0, 2) : [];
   for (let i = 0; i < 2; i++) {
     y += 42;
@@ -288,7 +285,7 @@ function drawSlip(ctx: CanvasRenderingContext2D, data: ReceiptData, top: number,
   y += 18;
 
   if (kind === "receipt") {
-    centered(data.dateLabel, `400 13px ${font}`, 20);
+    centered(data.dateLabel, `${WEIGHT} 13px ${font}`, 20);
   }
 
   if (data.feedbackUrl) {
@@ -308,8 +305,18 @@ function drawSlip(ctx: CanvasRenderingContext2D, data: ReceiptData, top: number,
     y += size + 6;
   }
 
+  // Each message line keeps to one printed line where possible: shrink from
+  // 19px down to 14px until it fits, and only wrap if it's still too long.
   if (data.footer) {
-    centered(data.footer.trim(), `600 19px ${font}`, 28);
+    for (const paragraph of data.footer.trim().split(/\r?\n/)) {
+      let size = 19;
+      ctx.font = `${WEIGHT} ${size}px ${font}`;
+      while (size > 14 && ctx.measureText(paragraph).width > contentWidth) {
+        size -= 1;
+        ctx.font = `${WEIGHT} ${size}px ${font}`;
+      }
+      centered(paragraph, ctx.font, Math.round(size * 1.45));
+    }
   }
 
   y += 16;

@@ -270,23 +270,29 @@ function drawSlip(ctx: CanvasRenderingContext2D, data: ReceiptData, top: number,
   }
   y += 16;
 
-  // ยอดรวม (Total) ________ บาท
-  y += 34;
+  // ยอดรวม (Total) ________ บาท — label, amount and บาท share one baseline,
+  // the amount a size up so it reads first, the rule just under the text.
+  y += 40;
   ctx.font = LABEL;
   ctx.textAlign = "left";
   const totalLabel = "ยอดรวม (Total)";
   ctx.fillText(totalLabel, left, y);
-  const totalStart = left + ctx.measureText(totalLabel).width + 6;
+  const totalStart = left + ctx.measureText(totalLabel).width + 8;
   ctx.textAlign = "right";
   ctx.fillText("บาท", right, y);
-  const totalEnd = right - ctx.measureText("บาท").width - 4;
-  line(totalStart, totalEnd, y + 2);
-  fillBlank(money(data.total), totalStart, totalEnd, y - 3, VALUE);
-  y += 18;
-
-  if (kind === "receipt") {
-    centered(data.dateLabel, `${WEIGHT} 13px ${font}`, 20);
+  const totalEnd = right - ctx.measureText("บาท").width - 8;
+  line(totalStart, totalEnd, y + 6);
+  // Money is never cut off with "…": a long amount shrinks to fit the blank.
+  const amount = money(data.total);
+  let amountSize = 27;
+  ctx.font = `${WEIGHT} ${amountSize}px ${font}`;
+  while (amountSize > 16 && ctx.measureText(amount).width > totalEnd - totalStart - 6) {
+    amountSize -= 1;
+    ctx.font = `${WEIGHT} ${amountSize}px ${font}`;
   }
+  ctx.textAlign = "center";
+  ctx.fillText(amount, (totalStart + totalEnd) / 2, y);
+  y += 30;
 
   if (data.feedbackUrl) {
     const qr = qrcode(0, "M");
@@ -317,6 +323,11 @@ function drawSlip(ctx: CanvasRenderingContext2D, data: ReceiptData, top: number,
       }
       centered(paragraph, ctx.font, Math.round(size * 1.45));
     }
+  }
+
+  if (kind === "receipt") {
+    y += 4;
+    centered(data.dateLabel, `${WEIGHT} 13px ${font}`, 20);
   }
 
   y += 16;

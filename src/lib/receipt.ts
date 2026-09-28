@@ -10,8 +10,7 @@
 //   label   — logo centred at the very top, Name ___ Zone ___, Note (2 lines),
 //             Total ___ บาท, feedback QR, message, arrow cut line at the bottom
 //   receipt — the same, plus each item with its price and the date
-// Several slips can be stacked into one tall image so a batch prints in a
-// single Save Image + one PeriPage print.
+// One slip per order: the owner prints each order as it's sold (no batching).
 
 import qrcode from "qrcode-generator";
 
@@ -26,8 +25,6 @@ const QR_SIZE = 150;
 // Thermal heads print only black or white; grey anti-aliasing turns into
 // speckle. Everything darker than this becomes solid black.
 const INK_THRESHOLD = 170;
-// iOS caps canvas area (~16.7M px), so a batch image holds at most this many slips.
-export const SLIPS_PER_IMAGE = 5;
 const FALLBACK_FONT = '"Mali", "Sarabun", "Noto Sans Thai", "Leelawadee UI", Tahoma, sans-serif';
 // Mali Medium for every line (owner's choice); size alone sets the hierarchy.
 const WEIGHT = 500;
@@ -397,18 +394,6 @@ export async function renderReceiptFile(data: ReceiptData): Promise<File> {
   const blob = await canvasToBlob(await buildSlipsCanvas([data]));
   const name = safe(data.customerRef || data.dateLabel);
   return new File([blob], `${data.kind ?? "label"}-${name || "sale"}.png`, { type: "image/png" });
-}
-
-/** Stacks slips into as few tall images as the canvas limit allows. */
-export async function renderBatchFiles(slips: ReceiptData[], stamp: string): Promise<File[]> {
-  const files: File[] = [];
-  for (let i = 0; i < slips.length; i += SLIPS_PER_IMAGE) {
-    const chunk = slips.slice(i, i + SLIPS_PER_IMAGE);
-    const blob = await canvasToBlob(await buildSlipsCanvas(chunk));
-    const part = slips.length > SLIPS_PER_IMAGE ? `-${i / SLIPS_PER_IMAGE + 1}` : "";
-    files.push(new File([blob], `labels-${safe(stamp)}${part}.png`, { type: "image/png" }));
-  }
-  return files;
 }
 
 /** Resolves "shared" once the Share Sheet completes (or the file downloaded),

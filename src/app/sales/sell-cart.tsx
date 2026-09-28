@@ -8,9 +8,7 @@ import { PAYMENT_METHODS, PLATFORM_OPTIONS } from "@/lib/platforms";
 import type { QuickSellDefaults } from "@/lib/data/sales";
 import type { ReceiptProfile } from "@/lib/data/receipt-profile";
 import { joinNameZone, renderReceiptFile, shareReceiptFile, type SlipKind } from "@/lib/receipt";
-import { enqueueSlip, removeSlips } from "@/lib/print-queue";
 import { todayISO } from "@/lib/dates";
-import { PrintQueue } from "./print-queue";
 
 export type SellTile = QuickSellDefaults & { inStock: number | null };
 
@@ -28,13 +26,13 @@ function savedSlipKind(): SlipKind {
 // Tap a tile = +1 bottle. A bar pinned above the tab bar shows the running
 // total; Checkout opens one sheet for platform, payment, and an optional
 // adjusted total. A common sale is two taps instead of tile → qty → submit.
-// After a sale its label joins the on-phone print queue, and the sheet
-// offers "Print now" (for a customer waiting) or "Later" (batch it). The
-// image is rendered while the sale saves, so the Print now tap can open the
-// Share Sheet immediately — iOS refuses it after an await.
+// After a sale the sheet offers "Print now" for that order's label — the
+// owner prints one slip per order, not in batches. The image is rendered
+// while the sale saves, so the tap can open the Share Sheet immediately —
+// iOS refuses it after an await. A skipped label can still be printed from
+// Sales history.
 type Printable = {
   file: File;
-  queuedId: string;
   kind: SlipKind;
   customer: string;
   bottles: number;
@@ -138,15 +136,11 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
 
   const printNow = () => {
     if (!printable) return;
-    const { file, queuedId } = printable;
-    shareReceiptFile(file, profile.businessName)
+    shareReceiptFile(printable.file, profile.businessName)
       .then((result) => {
-        if (result === "shared") {
-          removeSlips([queuedId]);
-          closeCheckout();
-        }
+        if (result === "shared") closeCheckout();
       })
-      .catch(() => setError("Couldn't open the print sheet — use Print all on the Sell page instead"));
+      .catch(() => setError("Couldn't open the print sheet — use Print in Sales history instead"));
   };
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -216,11 +210,9 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
       // Stock counts and history catch up in the background — the action no
       // longer rebuilds this page before returning (see logCartSale).
       setTimeout(() => router.refresh(), 0);
-      // Queue first, so the label is never lost even if the sheet is closed.
-      const queued = profile.printAfterSale ? enqueueSlip(slip) : null;
       const file = await receiptPromise;
-      if (file && queued) {
-        setPrintable({ file, queuedId: queued.id, kind, customer, bottles: bottleCount, total: chargedTotal });
+      if (file) {
+        setPrintable({ file, kind, customer, bottles: bottleCount, total: chargedTotal });
       } else {
         setToast(`Sold ${bottleCount} bottle${bottleCount === 1 ? "" : "s"} · ฿${chargedTotal.toFixed(0)}`);
         setCheckoutOpen(false);
@@ -231,11 +223,6 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
 
   return (
     <>
-      {profile.printAfterSale && (
-        <div className="mb-3">
-          <PrintQueue profile={profile} />
-        </div>
-      )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {tiles.map((t) => {
           const qty = cart[t.recipeId] ?? 0;
@@ -333,7 +320,7 @@ export function SellCart({ tiles, profile }: { tiles: SellTile[]; profile: Recei
               onClick={closeCheckout}
               className="min-h-12 w-full rounded-xl border border-border text-base font-medium text-text"
             >
-              Later — add to Print all
+              Done — print later from Sales history
             </button>
           </div>
         ) : (
